@@ -62,6 +62,12 @@
       </label>
     </div>
 
+    <div class="row">
+      <label>現在のランク
+        <select id="rankTier"></select>
+      </label>
+    </div>
+
     <textarea id="notes" placeholder="備考（任意）例：デュオでプラチナ帯希望、ボイスチャット必須 など"></textarea>
 
     <button class="reserve-btn" id="reserveBtn" disabled>予約する</button>
@@ -75,6 +81,15 @@
     </div>
 
     <h2 style="margin-top:26px;"><span class="num">03</span> 予約一覧</h2>
+
+    <div class="filter-bar">
+      <input id="filterName" placeholder="予約者名で検索">
+      <input id="filterFrom" type="date" title="この日から">
+      <span class="filter-sep">〜</span>
+      <input id="filterTo" type="date" title="この日まで">
+      <button id="filterClear" type="button">クリア</button>
+    </div>
+
     <div class="list" id="resvList">
       <div class="empty-state">まだ予約はありません。</div>
     </div>

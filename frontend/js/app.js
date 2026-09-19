@@ -11,6 +11,44 @@ const sb = window.supabase.createClient(
 const RESV_TABLE = 'reservations';
 const REPLY_TABLE = 'replies';
 
+// ---------- rank tiers ----------
+const RANK_GROUPS = [
+  { group:'Rookie',   subs:['IV','III','II','I'] },
+  { group:'Bronze',   subs:['IV','III','II','I'] },
+  { group:'Silver',   subs:['IV','III','II','I'] },
+  { group:'Gold',     subs:['IV','III','II','I'] },
+  { group:'Platinum', subs:['IV','III','II','I'] },
+  { group:'Diamond',  subs:['IV','III','II','I'] },
+  { group:'Master',   subs:[] },
+  { group:'Apex Predator', subs:[] },
+];
+function rankOptionsHtml(selected){
+  return RANK_GROUPS.map(g=>{
+    if(g.subs.length===0){
+      return `<option value="${g.group}" ${g.group===selected?'selected':''}>${g.group}</option>`;
+    }
+    const opts = g.subs.map(s=>{
+      const val = `${g.group} ${s}`;
+      return `<option value="${val}" ${val===selected?'selected':''}>${val}</option>`;
+    }).join('');
+    return `<optgroup label="${g.group}">${opts}</optgroup>`;
+  }).join('');
+}
+
+// ---------- status ----------
+const STATUS_OPTIONS = ['募集中','確定','キャンセル'];
+function statusOptionsHtml(selected){
+  return STATUS_OPTIONS.map(s=>`<option value="${s}" ${s===selected?'selected':''}>${s}</option>`).join('');
+}
+function statusClass(status){
+  if(status==='確定') return 'status-badge confirmed';
+  if(status==='キャンセル') return 'status-badge cancelled';
+  return 'status-badge open';
+}
+
+// ---------- filters ----------
+let filters = { name:'', from:'', to:'' };
+
 // ---------- state ----------
 let settings = { webhook: '', apexKey: '' };
 let selectedDate = null;   // 'YYYY-MM-DD'
@@ -88,7 +126,9 @@ async function loadReservations(){
     reservedBy: r.reserved_by,
     reservedFor: r.reserved_for,
     note: r.note,
-    map: r.map
+    map: r.map,
+    rankTier: r.rank_tier,
+    status: r.status || '募集中'
   }));
 }
 async function saveReservation(resv){
@@ -98,7 +138,9 @@ async function saveReservation(resv){
     reservation_date: resv.date,
     reservation_time: resv.time,
     note: resv.note || null,
-    map: resv.map || null
+    map: resv.map || null,
+    rank_tier: resv.rankTier || null,
+    status: '募集中'
   });
   if(error) throw error;
 }
@@ -106,6 +148,37 @@ async function deleteReservation(id){
   const { error } = await sb.from(RESV_TABLE).delete().eq('id', id);
   if(error){ console.error('削除に失敗:', error); }
   renderReservations();
+}
+
+// 同じ日時にすでに有効な(キャンセル以外の)予約がないかを確認する
+async function findConflicting(date, time, excludeId){
+  let query = sb
+    .from(RESV_TABLE)
+    .select('id,reserved_by,status')
+    .eq('reservation_date', date)
+    .eq('reservation_time', time)
+    .neq('status', 'キャンセル');
+  if(excludeId) query = query.neq('id', excludeId);
+  const { data, error } = await query;
+  if(error){ console.error('重複チェックに失敗:', error); return []; }
+  return data || [];
+}
+
+async function updateReservationStatus(id, status){
+  const { error } = await sb.from(RESV_TABLE).update({ status }).eq('id', id);
+  if(error){ console.error('ステータス更新に失敗:', error); return false; }
+  return true;
+}
+
+async function updateReservation(id, patch){
+  const { error } = await sb.from(RESV_TABLE).update({
+    reservation_date: patch.date,
+    reservation_time: patch.time,
+    rank_tier: patch.rankTier || null,
+    reserved_for: patch.reservedFor || null,
+    note: patch.note || null
+  }).eq('id', id);
+  if(error) throw error;
 }
 
 // ---------- replies ----------
@@ -295,6 +368,7 @@ async function sendDiscordNotice(resv){
     `日時: ${resv.date} ${resv.time}\n` +
     `予約者: ${resv.reservedBy}\n` +
     (resv.reservedFor ? `予約先: ${resv.reservedFor}\n` : '') +
+    (resv.rankTier ? `現在のランク: ${resv.rankTier}\n` : '') +
     (resv.map ? `参考ランクマップ（予約時点）: ${resv.map}\n` : '') +
     (resv.note ? `備考: ${resv.note}` : '備考: なし');
   try{
@@ -341,6 +415,20 @@ $('reserveBtn').addEventListener('click', async ()=>{
     return;
   }
 
+  // 重複チェック：同じ日時にすでに有効な予約がないか確認
+  const conflicts = await findConflicting(selectedDate, selectedTime);
+  if(conflicts.length > 0){
+    const names = conflicts.map(c => c.reserved_by).join('、');
+    const proceed = confirm(
+      `この日時(${selectedDate} ${selectedTime})にはすでに予約があります（予約者: ${names}）。\nそれでも登録しますか？`
+    );
+    if(!proceed){
+      $('reserveStatus').textContent = '登録をキャンセルしました。';
+      $('reserveStatus').className = 'status-line';
+      return;
+    }
+  }
+
   $('reserveBtn').disabled = true;
   $('reserveStatus').textContent = '予約処理中...';
   $('reserveStatus').className = 'status-line';
@@ -351,6 +439,7 @@ $('reserveBtn').addEventListener('click', async ()=>{
     time: selectedTime,
     reservedBy: reservedBy,
     reservedFor: $('reservedFor').value.trim(),
+    rankTier: $('rankTier').value,
     note: $('notes').value.trim(),
     map: map
   };
@@ -390,15 +479,32 @@ function formatDateTime(iso){
   return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function applyFilters(items){
+  return items.filter(r=>{
+    if(filters.name && !(r.reservedBy||'').includes(filters.name)) return false;
+    if(filters.from && r.date < filters.from) return false;
+    if(filters.to && r.date > filters.to) return false;
+    return true;
+  });
+}
+
 async function renderReservations(){
   const items = await loadReservations();
+
   if(items.length===0){
     $('resvList').innerHTML = `<div class="empty-state">まだ予約はありません。</div>`;
     return;
   }
-  const repliesByResv = await loadRepliesGrouped(items.map(r=>r.id));
 
-  $('resvList').innerHTML = items.map(r=>{
+  const filteredItems = applyFilters(items);
+  if(filteredItems.length===0){
+    $('resvList').innerHTML = `<div class="empty-state">条件に一致する予約はありません。</div>`;
+    return;
+  }
+
+  const repliesByResv = await loadRepliesGrouped(filteredItems.map(r=>r.id));
+
+  $('resvList').innerHTML = filteredItems.map(r=>{
     const replies = repliesByResv[r.id] || [];
     const repliesHtml = replies.length
       ? replies.map(rep => `
@@ -412,28 +518,158 @@ async function renderReservations(){
 
     return `
     <div class="resv" data-id="${r.id}">
-      <button class="del" data-id="${r.id}">削除</button>
+      <div class="resv-header">
+        <div class="resv-status">
+          <span class="${statusClass(r.status)}">${r.status}</span>
+          <select class="status-select" data-id="${r.id}">${statusOptionsHtml(r.status)}</select>
+        </div>
+        <div class="resv-actions">
+          <button class="reply-toggle" data-id="${r.id}">返信</button>
+          <button class="edit-toggle" data-id="${r.id}">編集</button>
+          <button class="del" data-id="${r.id}">削除</button>
+        </div>
+      </div>
+
       <div class="dt">${r.date} ${r.time}</div>
       <div class="who">予約者: ${escapeHtml(r.reservedBy)}${r.reservedFor ? ` → ${escapeHtml(r.reservedFor)}` : ''}</div>
+      ${r.rankTier ? `<div class="rank">現在のランク: ${escapeHtml(r.rankTier)}</div>` : ''}
       ${r.map ? `<div class="map">参考マップ: ${r.map}</div>` : ''}
       ${r.note ? `<div class="note">${escapeHtml(r.note)}</div>` : ''}
 
+      <div class="edit-form" id="edit-form-${r.id}">
+        <div class="form-title">✏ 予約を編集</div>
+        <div class="row">
+          <label>日付<input type="date" class="edit-date" data-id="${r.id}" value="${r.date}"></label>
+          <label>時刻<input type="time" class="edit-time" data-id="${r.id}" value="${r.time}"></label>
+        </div>
+        <label>予約先<input type="text" class="edit-for" data-id="${r.id}" value="${escapeHtml(r.reservedFor)}"></label>
+        <label>ランク<select class="edit-rank" data-id="${r.id}">${rankOptionsHtml(r.rankTier)}</select></label>
+        <label>備考<textarea class="edit-note" data-id="${r.id}">${escapeHtml(r.note)}</textarea></label>
+        <div class="row">
+          <button class="edit-save-btn" data-id="${r.id}">保存</button>
+          <button class="edit-cancel-btn" data-id="${r.id}">キャンセル</button>
+        </div>
+        <div class="status-line" id="edit-status-${r.id}"></div>
+      </div>
+
       ${replies.length ? `<div class="replies">${repliesHtml}</div>` : ''}
 
-      <div class="reply-form">
+      <div class="reply-form" id="reply-form-${r.id}">
+        <div class="form-title">💬 返信する</div>
         <input class="reply-by-input" data-id="${r.id}" placeholder="返信者名（任意）">
         <textarea class="reply-msg-input" data-id="${r.id}" placeholder="この予約への返信を入力"></textarea>
-        <button class="reply-send-btn" data-id="${r.id}">返信する</button>
+        <div class="row">
+          <button class="reply-send-btn" data-id="${r.id}">送信</button>
+          <button class="reply-cancel-btn" data-id="${r.id}">キャンセル</button>
+        </div>
         <div class="status-line" id="reply-status-${r.id}"></div>
       </div>
     </div>
   `;
   }).join('');
 
+  // ---- 削除 ----
   $('resvList').querySelectorAll('.del').forEach(btn=>{
     btn.addEventListener('click', ()=> deleteReservation(btn.dataset.id));
   });
 
+  // ---- ステータス変更 ----
+  $('resvList').querySelectorAll('.status-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const id = sel.dataset.id;
+      const ok = await updateReservationStatus(id, sel.value);
+      if(ok) renderReservations();
+    });
+  });
+
+  // ---- 編集フォームの開閉（開いているときは返信フォームを閉じる） ----
+  $('resvList').querySelectorAll('.edit-toggle').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.id;
+      const editForm = document.getElementById(`edit-form-${id}`);
+      const replyForm = document.getElementById(`reply-form-${id}`);
+      if(replyForm) replyForm.classList.remove('open');
+      if(editForm) editForm.classList.toggle('open');
+    });
+  });
+  $('resvList').querySelectorAll('.edit-cancel-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const form = document.getElementById(`edit-form-${btn.dataset.id}`);
+      if(form) form.classList.remove('open');
+    });
+  });
+
+  // ---- 返信フォームの開閉（開いているときは編集フォームを閉じる） ----
+  $('resvList').querySelectorAll('.reply-toggle').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.id;
+      const replyForm = document.getElementById(`reply-form-${id}`);
+      const editForm = document.getElementById(`edit-form-${id}`);
+      if(editForm) editForm.classList.remove('open');
+      if(replyForm) replyForm.classList.toggle('open');
+    });
+  });
+  $('resvList').querySelectorAll('.reply-cancel-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const form = document.getElementById(`reply-form-${btn.dataset.id}`);
+      if(form) form.classList.remove('open');
+    });
+  });
+
+  // ---- 編集の保存 ----
+  $('resvList').querySelectorAll('.edit-save-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.id;
+      const statusEl = document.getElementById(`edit-status-${id}`);
+      const dateInput = $('resvList').querySelector(`.edit-date[data-id="${id}"]`);
+      const timeInput = $('resvList').querySelector(`.edit-time[data-id="${id}"]`);
+      const forInput = $('resvList').querySelector(`.edit-for[data-id="${id}"]`);
+      const rankSelect = $('resvList').querySelector(`.edit-rank[data-id="${id}"]`);
+      const noteInput = $('resvList').querySelector(`.edit-note[data-id="${id}"]`);
+
+      const newDate = dateInput.value;
+      const newTime = timeInput.value;
+      if(!newDate || !newTime){
+        statusEl.textContent = '日付と時刻を入力してください。';
+        statusEl.className = 'status-line err';
+        return;
+      }
+
+      // 変更後の日時が他の予約と重複していないか確認（自分自身は除く）
+      const conflicts = await findConflicting(newDate, newTime, id);
+      if(conflicts.length > 0){
+        const names = conflicts.map(c => c.reserved_by).join('、');
+        const proceed = confirm(
+          `変更後の日時(${newDate} ${newTime})にはすでに別の予約があります（予約者: ${names}）。\nそれでも保存しますか？`
+        );
+        if(!proceed) return;
+      }
+
+      btn.disabled = true;
+      statusEl.textContent = '保存中...';
+      statusEl.className = 'status-line';
+
+      try{
+        await updateReservation(id, {
+          date: newDate,
+          time: newTime,
+          reservedFor: forInput.value.trim(),
+          rankTier: rankSelect.value,
+          note: noteInput.value.trim()
+        });
+      }catch(e){
+        console.error(e);
+        statusEl.textContent = '保存に失敗しました';
+        statusEl.className = 'status-line err';
+        btn.disabled = false;
+        return;
+      }
+
+      renderReservations();
+    });
+  });
+
+  // ---- 返信 ----
   $('resvList').querySelectorAll('.reply-send-btn').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const id = btn.dataset.id;
@@ -453,7 +689,7 @@ async function renderReservations(){
       statusEl.className = 'status-line';
 
       const repliedBy = byInput.value.trim();
-      const target = items.find(r => r.id === id);
+      const target = filteredItems.find(r => r.id === id);
 
       try{
         await saveReply(id, repliedBy, message);
@@ -463,6 +699,11 @@ async function renderReservations(){
         statusEl.className = 'status-line err';
         btn.disabled = false;
         return;
+      }
+
+      // 返信が来た予約は、まだ「募集中」であれば自動的に「確定」にする
+      if(target && target.status === '募集中'){
+        await updateReservationStatus(id, '確定');
       }
 
       const notice = await sendDiscordReplyNotice(target, repliedBy, message);
@@ -482,6 +723,27 @@ async function renderReservations(){
   });
 }
 
+// ---------- filter events ----------
+$('filterName').addEventListener('input', ()=>{
+  filters.name = $('filterName').value.trim();
+  renderReservations();
+});
+$('filterFrom').addEventListener('change', ()=>{
+  filters.from = $('filterFrom').value;
+  renderReservations();
+});
+$('filterTo').addEventListener('change', ()=>{
+  filters.to = $('filterTo').value;
+  renderReservations();
+});
+$('filterClear').addEventListener('click', ()=>{
+  filters = { name:'', from:'', to:'' };
+  $('filterName').value = '';
+  $('filterFrom').value = '';
+  $('filterTo').value = '';
+  renderReservations();
+});
+
 // ---------- settings panel toggle ----------
 $('settingsToggle').addEventListener('click', ()=>{
   $('settingsPanel').classList.toggle('open');
@@ -491,6 +753,7 @@ $('saveSettings').addEventListener('click', saveSettings);
 // ---------- init ----------
 viewYear = today.getFullYear();
 viewMonth = today.getMonth();
+$('rankTier').innerHTML = rankOptionsHtml();
 renderCalendar();
 renderTimeSlots();
 updateSelectedLine();
