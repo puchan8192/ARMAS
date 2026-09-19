@@ -1,5 +1,16 @@
 const $ = id => document.getElementById(id);
 
+// ---------- supabase client ----------
+// 予約データ（誰がいつ誰宛に予約したか）はSupabase(外部DB)に保存する。
+// window.supabase はSDKが提供するグローバル名前空間なので、
+// クライアントインスタンスは別名(sb)で保持して衝突を避ける。
+const sb = window.supabase.createClient(
+  window.SUPABASE_CONFIG.url,
+  window.SUPABASE_CONFIG.anonKey
+);
+const RESV_TABLE = 'reservations';
+const REPLY_TABLE = 'replies';
+
 // ---------- state ----------
 let settings = { webhook: '', apexKey: '' };
 let selectedDate = null;   // 'YYYY-MM-DD'
@@ -60,26 +71,75 @@ async function saveSettings(){
   if(settings.apexKey) fetchMapRotation();
 }
 async function loadReservations(){
-  try{
-    const list = localDB.list('resv:');
-    if(!list || !list.keys || list.keys.length===0) return [];
-    const items = [];
-    for(const k of list.keys){
-      try{
-        const r = localDB.get(k);
-        if(r && r.value) items.push(JSON.parse(r.value));
-      }catch(e){}
-    }
-    items.sort((a,b)=> (a.date+a.time) < (b.date+b.time) ? -1 : 1);
-    return items;
-  }catch(e){ return []; }
+  const { data, error } = await sb
+    .from(RESV_TABLE)
+    .select('*')
+    .order('reservation_date', { ascending: true })
+    .order('reservation_time', { ascending: true });
+  if(error){
+    console.error('予約の取得に失敗:', error);
+    return [];
+  }
+  // DBのカラム名(reservation_date等)を、既存の描画コードが使う名前に変換
+  return (data || []).map(r => ({
+    id: r.id,
+    date: r.reservation_date,
+    time: r.reservation_time ? r.reservation_time.slice(0,5) : r.reservation_time,
+    reservedBy: r.reserved_by,
+    reservedFor: r.reserved_for,
+    note: r.note,
+    map: r.map
+  }));
 }
 async function saveReservation(resv){
-  localDB.set('resv:'+resv.id, JSON.stringify(resv));
+  const { error } = await sb.from(RESV_TABLE).insert({
+    reserved_by: resv.reservedBy,
+    reserved_for: resv.reservedFor || null,
+    reservation_date: resv.date,
+    reservation_time: resv.time,
+    note: resv.note || null,
+    map: resv.map || null
+  });
+  if(error) throw error;
 }
 async function deleteReservation(id){
-  localDB.delete('resv:'+id);
+  const { error } = await sb.from(RESV_TABLE).delete().eq('id', id);
+  if(error){ console.error('削除に失敗:', error); }
   renderReservations();
+}
+
+// ---------- replies ----------
+// 予約一覧の描画時にまとめて取得するため、reservation_idごとにグルーピングして返す
+async function loadRepliesGrouped(reservationIds){
+  if(!reservationIds || reservationIds.length===0) return {};
+  const { data, error } = await sb
+    .from(REPLY_TABLE)
+    .select('*')
+    .in('reservation_id', reservationIds)
+    .order('created_at', { ascending: true });
+  if(error){
+    console.error('返信の取得に失敗:', error);
+    return {};
+  }
+  const grouped = {};
+  for(const row of (data || [])){
+    if(!grouped[row.reservation_id]) grouped[row.reservation_id] = [];
+    grouped[row.reservation_id].push({
+      id: row.id,
+      repliedBy: row.replied_by,
+      message: row.message,
+      createdAt: row.created_at
+    });
+  }
+  return grouped;
+}
+async function saveReply(reservationId, repliedBy, message){
+  const { error } = await sb.from(REPLY_TABLE).insert({
+    reservation_id: reservationId,
+    replied_by: repliedBy || null,
+    message: message
+  });
+  if(error) throw error;
 }
 
 // ---------- calendar ----------
@@ -233,6 +293,8 @@ async function sendDiscordNotice(resv){
   const content =
     `📅 **新しい予約が入りました**\n` +
     `日時: ${resv.date} ${resv.time}\n` +
+    `予約者: ${resv.reservedBy}\n` +
+    (resv.reservedFor ? `予約先: ${resv.reservedFor}\n` : '') +
     (resv.map ? `参考ランクマップ（予約時点）: ${resv.map}\n` : '') +
     (resv.note ? `備考: ${resv.note}` : '備考: なし');
   try{
@@ -247,17 +309,48 @@ async function sendDiscordNotice(resv){
   }
 }
 
+async function sendDiscordReplyNotice(resv, repliedBy, message){
+  if(!settings.webhook) return { sent:false, reason:'Webhook未設定' };
+  const target = resv.reservedBy
+    ? `${resv.reservedBy}${resv.reservedFor ? ` → ${resv.reservedFor}` : ''}（${resv.date} ${resv.time}）`
+    : `${resv.date} ${resv.time}`;
+  const content =
+    `💬 **予約への返信があります**\n` +
+    `対象の予約: ${target}\n` +
+    `予約時のメッセージ: ${resv.note ? resv.note : 'なし'}\n` +
+    `返信${repliedBy ? `（${repliedBy}より）` : ''}: ${message}`;
+  try{
+    const res = await fetch(settings.webhook, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ content })
+    });
+    return { sent: res.ok };
+  }catch(e){
+    return { sent:false, reason:'通信エラー' };
+  }
+}
+
 $('reserveBtn').addEventListener('click', async ()=>{
   if(!selectedDate || !selectedTime) return;
+
+  const reservedBy = $('reservedBy').value.trim();
+  if(!reservedBy){
+    $('reserveStatus').textContent = '「予約者」を入力してください。';
+    $('reserveStatus').className = 'status-line err';
+    return;
+  }
+
   $('reserveBtn').disabled = true;
   $('reserveStatus').textContent = '予約処理中...';
   $('reserveStatus').className = 'status-line';
 
   const map = await currentMapSnapshot();
   const resv = {
-    id: Date.now().toString(36),
     date: selectedDate,
     time: selectedTime,
+    reservedBy: reservedBy,
+    reservedFor: $('reservedFor').value.trim(),
     note: $('notes').value.trim(),
     map: map
   };
@@ -265,7 +358,8 @@ $('reserveBtn').addEventListener('click', async ()=>{
   try{
     await saveReservation(resv);
   }catch(e){
-    $('reserveStatus').textContent = '予約の保存に失敗しました';
+    console.error(e);
+    $('reserveStatus').textContent = '予約の保存に失敗しました（DB接続をご確認ください）';
     $('reserveStatus').className = 'status-line err';
     $('reserveBtn').disabled = false;
     return;
@@ -279,6 +373,7 @@ $('reserveBtn').addEventListener('click', async ()=>{
   $('reserveStatus').className = notice.sent ? 'status-line ok' : 'status-line err';
 
   $('notes').value = '';
+  $('reservedFor').value = '';
   selectedTime = null;
   renderTimeSlots();
   updateSelectedLine();
@@ -286,22 +381,104 @@ $('reserveBtn').addEventListener('click', async ()=>{
   setTimeout(()=>{ $('reserveBtn').disabled = false; }, 500);
 });
 
+function escapeHtml(s){
+  return (s || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function formatDateTime(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 async function renderReservations(){
   const items = await loadReservations();
   if(items.length===0){
     $('resvList').innerHTML = `<div class="empty-state">まだ予約はありません。</div>`;
     return;
   }
-  $('resvList').innerHTML = items.map(r=>`
+  const repliesByResv = await loadRepliesGrouped(items.map(r=>r.id));
+
+  $('resvList').innerHTML = items.map(r=>{
+    const replies = repliesByResv[r.id] || [];
+    const repliesHtml = replies.length
+      ? replies.map(rep => `
+          <div class="reply-item">
+            <span class="reply-by">${escapeHtml(rep.repliedBy) || '匿名'}</span>
+            <span class="reply-time">${formatDateTime(rep.createdAt)}</span>
+            <div class="reply-msg">${escapeHtml(rep.message)}</div>
+          </div>
+        `).join('')
+      : '';
+
+    return `
     <div class="resv" data-id="${r.id}">
       <button class="del" data-id="${r.id}">削除</button>
       <div class="dt">${r.date} ${r.time}</div>
+      <div class="who">予約者: ${escapeHtml(r.reservedBy)}${r.reservedFor ? ` → ${escapeHtml(r.reservedFor)}` : ''}</div>
       ${r.map ? `<div class="map">参考マップ: ${r.map}</div>` : ''}
-      ${r.note ? `<div class="note">${r.note.replace(/</g,'&lt;')}</div>` : ''}
+      ${r.note ? `<div class="note">${escapeHtml(r.note)}</div>` : ''}
+
+      ${replies.length ? `<div class="replies">${repliesHtml}</div>` : ''}
+
+      <div class="reply-form">
+        <input class="reply-by-input" data-id="${r.id}" placeholder="返信者名（任意）">
+        <textarea class="reply-msg-input" data-id="${r.id}" placeholder="この予約への返信を入力"></textarea>
+        <button class="reply-send-btn" data-id="${r.id}">返信する</button>
+        <div class="status-line" id="reply-status-${r.id}"></div>
+      </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
+
   $('resvList').querySelectorAll('.del').forEach(btn=>{
     btn.addEventListener('click', ()=> deleteReservation(btn.dataset.id));
+  });
+
+  $('resvList').querySelectorAll('.reply-send-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.id;
+      const byInput = $('resvList').querySelector(`.reply-by-input[data-id="${id}"]`);
+      const msgInput = $('resvList').querySelector(`.reply-msg-input[data-id="${id}"]`);
+      const statusEl = document.getElementById(`reply-status-${id}`);
+      const message = msgInput.value.trim();
+
+      if(!message){
+        statusEl.textContent = '返信内容を入力してください。';
+        statusEl.className = 'status-line err';
+        return;
+      }
+
+      btn.disabled = true;
+      statusEl.textContent = '送信中...';
+      statusEl.className = 'status-line';
+
+      const repliedBy = byInput.value.trim();
+      const target = items.find(r => r.id === id);
+
+      try{
+        await saveReply(id, repliedBy, message);
+      }catch(e){
+        console.error(e);
+        statusEl.textContent = '返信の保存に失敗しました';
+        statusEl.className = 'status-line err';
+        btn.disabled = false;
+        return;
+      }
+
+      const notice = await sendDiscordReplyNotice(target, repliedBy, message);
+      if(!notice.sent){
+        // 保存自体は成功しているので、一覧を再描画してから通知失敗を伝える
+        await renderReservations();
+        const newStatusEl = document.getElementById(`reply-status-${id}`);
+        if(newStatusEl){
+          newStatusEl.textContent = `返信は保存されましたが、Discord通知は送信できませんでした（${notice.reason || 'Webhook未確認'}）。`;
+          newStatusEl.className = 'status-line err';
+        }
+        return;
+      }
+
+      await renderReservations();
+    });
   });
 }
 

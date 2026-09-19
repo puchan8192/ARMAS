@@ -43,9 +43,9 @@
     background:var(--panel);border-bottom:1px solid var(--border);
   }
   .settings.open{display:block;}
-  .settings .row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;}
-  .settings label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);flex:1;min-width:260px;}
-  .settings input{
+  .settings .row, .card .row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;}
+  .settings label, .card .row label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);flex:1;min-width:260px;}
+  .settings input, .card .row input{
     background:var(--bg);border:1px solid var(--border);color:var(--text);
     padding:9px 10px;border-radius:6px;font-size:13px;
   }
@@ -131,6 +131,7 @@
     position:relative;
   }
   .resv .dt{font-weight:600;font-size:14px;}
+  .resv .who{font-size:12.5px;color:var(--muted);margin-top:4px;}
   .resv .map{font-size:12px;color:var(--accent);margin-top:3px;}
   .resv .note{font-size:12.5px;color:var(--muted);margin-top:6px;white-space:pre-wrap;}
   .resv .del{
@@ -139,3 +140,35 @@
   }
   .resv .del:hover{color:var(--danger);}
   .empty-state{color:var(--muted);font-size:13px;padding:14px 0;}
+
+  /* replies */
+  .replies{
+    margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .reply-item{
+    background:var(--bg);border:1px solid var(--border);border-radius:6px;
+    padding:8px 10px;font-size:12.5px;
+  }
+  .reply-item .reply-by{font-weight:600;color:var(--text);}
+  .reply-item .reply-time{color:var(--muted);font-size:11px;margin-left:8px;}
+  .reply-item .reply-msg{margin-top:4px;color:var(--muted);white-space:pre-wrap;}
+
+  .reply-form{
+    margin-top:10px;padding-top:10px;border-top:1px solid var(--border);
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .reply-by-input{
+    background:var(--bg);border:1px solid var(--border);color:var(--text);
+    padding:7px 9px;border-radius:6px;font-size:12.5px;
+  }
+  .reply-msg-input{
+    width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
+    border-radius:6px;padding:8px;font-size:12.5px;font-family:inherit;resize:vertical;min-height:50px;
+  }
+  .reply-send-btn{
+    align-self:flex-start;padding:7px 14px;border:none;border-radius:6px;
+    background:var(--accent);color:#1a0e08;font-weight:600;font-size:12.5px;cursor:pointer;
+  }
+  .reply-send-btn:hover{filter:brightness(1.08);}
+  .reply-send-btn:disabled{background:var(--panel-2);color:var(--muted);cursor:not-allowed;}

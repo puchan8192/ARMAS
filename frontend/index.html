@@ -53,6 +53,15 @@
 
     <div class="selected-line" id="selectedLine">日付と時間を選択してください。</div>
 
+    <div class="row">
+      <label>予約者（あなたの名前）
+        <input id="reservedBy" placeholder="例: たろう">
+      </label>
+      <label>予約先（相手・宛先）
+        <input id="reservedFor" placeholder="例: はなこ / チームA">
+      </label>
+    </div>
+
     <textarea id="notes" placeholder="備考（任意）例：デュオでプラチナ帯希望、ボイスチャット必須 など"></textarea>
 
     <button class="reserve-btn" id="reserveBtn" disabled>予約する</button>
@@ -73,6 +82,15 @@
 </main>
 
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // Supabaseプロジェクトの接続情報
+  // anon keyはブラウザに公開される前提のキーです（RLSで保護しています）
+  window.SUPABASE_CONFIG = {
+    url: 'https://okrubnfzdgnmxdnqknch.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rcnVibmZ6ZGdubXhkbnFrbmNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3MzIzNTcsImV4cCI6MjEwNTMwODM1N30.6kCbBx3HAqqoL5ArQRnHabOx6isnMi7BSCGLxYrD0p8'
+  };
+</script>
 <script src="js/app.js"></script>
 </body>
 </html>
