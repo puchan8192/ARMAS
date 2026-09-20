@@ -165,20 +165,28 @@ async function findConflicting(date, time, excludeId){
 }
 
 async function updateReservationStatus(id, status){
-  const { error } = await sb.from(RESV_TABLE).update({ status }).eq('id', id);
+  const { data, error } = await sb.from(RESV_TABLE).update({ status }).eq('id', id).select();
   if(error){ console.error('ステータス更新に失敗:', error); return false; }
+  if(!data || data.length===0){
+    console.error('ステータス更新が反映されませんでした（RLSのupdateポリシーをご確認ください）');
+    return false;
+  }
   return true;
 }
 
 async function updateReservation(id, patch){
-  const { error } = await sb.from(RESV_TABLE).update({
+  const { data, error } = await sb.from(RESV_TABLE).update({
     reservation_date: patch.date,
     reservation_time: patch.time,
     rank_tier: patch.rankTier || null,
     reserved_for: patch.reservedFor || null,
     note: patch.note || null
-  }).eq('id', id);
+  }).eq('id', id).select();
   if(error) throw error;
+  if(!data || data.length===0){
+    // RLSのupdateポリシーが無い場合、エラーは出ずに0件更新になることがある
+    throw new Error('更新が反映されませんでした（Supabaseのupdateポリシーをご確認ください）');
+  }
 }
 
 // ---------- replies ----------
@@ -215,6 +223,31 @@ async function saveReply(reservationId, repliedBy, message){
   if(error) throw error;
 }
 
+// ---------- calendar reservation markers ----------
+// カレンダー・時間帯選択画面に「すでに予約がある」ことを表示するためのキャッシュ。
+// キャンセル済みの予約は空き扱いにするため除外する。
+let calendarReservations = [];
+async function loadCalendarMarkers(){
+  const { data, error } = await sb
+    .from(RESV_TABLE)
+    .select('reservation_date,reservation_time,reserved_by,status')
+    .neq('status', 'キャンセル');
+  if(error){
+    console.error('カレンダー用データの取得に失敗:', error);
+    calendarReservations = [];
+    return;
+  }
+  calendarReservations = (data || []).map(r => ({
+    date: r.reservation_date,
+    time: r.reservation_time ? r.reservation_time.slice(0,5) : r.reservation_time,
+    reservedBy: r.reserved_by,
+    status: r.status || '募集中'
+  }));
+}
+function reservationsOnDate(date){
+  return calendarReservations.filter(r => r.date === date);
+}
+
 // ---------- calendar ----------
 function pad(n){ return String(n).padStart(2,'0'); }
 
@@ -234,8 +267,15 @@ function renderCalendar(){
     const isPast = dateObj < today;
     const isToday = dateObj.getTime() === today.getTime();
     const isSelected = iso === selectedDate;
-    html += `<div class="day ${isPast?'past':''} ${isToday?'today':''} ${isSelected?'selected':''}"
-                  data-date="${iso}">${d}</div>`;
+
+    const dayResvs = reservationsOnDate(iso);
+    const hasResv = dayResvs.length > 0;
+    const titleAttr = hasResv
+      ? dayResvs.map(r => `${r.time} ${r.reservedBy}（${r.status}）`).join('\n').replace(/"/g,'&quot;')
+      : '';
+
+    html += `<div class="day ${isPast?'past':''} ${isToday?'today':''} ${isSelected?'selected':''} ${hasResv?'has-resv':''}"
+                  data-date="${iso}" title="${titleAttr}">${d}${hasResv ? '<span class="dot"></span>' : ''}</div>`;
   }
   $('calGrid').innerHTML = html;
 
@@ -243,6 +283,7 @@ function renderCalendar(){
     el.addEventListener('click', ()=>{
       selectedDate = el.dataset.date;
       renderCalendar();
+      renderTimeSlots();
       updateSelectedLine();
       if(settings.apexKey) fetchMapRotation();
     });
@@ -250,11 +291,14 @@ function renderCalendar(){
 }
 
 function renderTimeSlots(){
+  const dayResvs = selectedDate ? reservationsOnDate(selectedDate) : [];
   let html = '';
   for(let h=0; h<24; h++){
     for(let m=0; m<60; m+=30){
       const t = `${pad(h)}:${pad(m)}`;
-      html += `<div class="time-slot ${t===selectedTime?'selected':''}" data-time="${t}">${t}</div>`;
+      const match = dayResvs.find(r => r.time === t);
+      const titleAttr = match ? `${match.reservedBy}（${match.status}）`.replace(/"/g,'&quot;') : '';
+      html += `<div class="time-slot ${t===selectedTime?'selected':''} ${match?'taken':''}" data-time="${t}" title="${titleAttr}">${t}${match ? '<span class="dot"></span>' : ''}</div>`;
     }
   }
   $('timeGrid').innerHTML = html;
@@ -370,6 +414,26 @@ async function sendDiscordNotice(resv){
     (resv.reservedFor ? `予約先: ${resv.reservedFor}\n` : '') +
     (resv.rankTier ? `現在のランク: ${resv.rankTier}\n` : '') +
     (resv.map ? `参考ランクマップ（予約時点）: ${resv.map}\n` : '') +
+    (resv.note ? `備考: ${resv.note}` : '備考: なし');
+  try{
+    const res = await fetch(settings.webhook, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ content })
+    });
+    return { sent: res.ok };
+  }catch(e){
+    return { sent:false, reason:'通信エラー' };
+  }
+}
+
+async function sendDiscordCancelNotice(resv){
+  if(!settings.webhook) return { sent:false, reason:'Webhook未設定' };
+  const content =
+    `🚫 **予約がキャンセルされました**\n` +
+    `日時: ${resv.date} ${resv.time}\n` +
+    `予約者: ${resv.reservedBy}${resv.reservedFor ? ` → ${resv.reservedFor}` : ''}\n` +
+    (resv.rankTier ? `現在のランク: ${resv.rankTier}\n` : '') +
     (resv.note ? `備考: ${resv.note}` : '備考: なし');
   try{
     const res = await fetch(settings.webhook, {
@@ -568,17 +632,40 @@ async function renderReservations(){
   `;
   }).join('');
 
-  // ---- 削除 ----
+  // ---- 削除（確認ダイアログ付き） ----
   $('resvList').querySelectorAll('.del').forEach(btn=>{
-    btn.addEventListener('click', ()=> deleteReservation(btn.dataset.id));
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.id;
+      const target = filteredItems.find(r => r.id === id);
+      const label = target ? `${target.date} ${target.time}（予約者: ${target.reservedBy}）` : 'この予約';
+      if(confirm(`${label} を削除します。よろしいですか？\n※この操作は取り消せません。`)){
+        deleteReservation(id);
+      }
+    });
   });
 
-  // ---- ステータス変更 ----
+  // ---- ステータス変更（キャンセル時はDiscordへ通知） ----
   $('resvList').querySelectorAll('.status-select').forEach(sel=>{
+    const prevValue = sel.value;
     sel.addEventListener('change', async ()=>{
       const id = sel.dataset.id;
-      const ok = await updateReservationStatus(id, sel.value);
-      if(ok) renderReservations();
+      const newStatus = sel.value;
+      const ok = await updateReservationStatus(id, newStatus);
+      if(!ok){
+        alert('ステータスの更新に失敗しました。Supabaseのupdateポリシーをご確認ください。');
+        sel.value = prevValue;
+        return;
+      }
+      if(newStatus === 'キャンセル'){
+        const target = filteredItems.find(r => r.id === id);
+        if(target){
+          const notice = await sendDiscordCancelNotice({ ...target, status: newStatus });
+          if(!notice.sent){
+            alert(`ステータスは更新されましたが、Discordへの通知は送信できませんでした（${notice.reason || 'Webhook未確認'}）。`);
+          }
+        }
+      }
+      renderReservations();
     });
   });
 
@@ -659,7 +746,7 @@ async function renderReservations(){
         });
       }catch(e){
         console.error(e);
-        statusEl.textContent = '保存に失敗しました';
+        statusEl.textContent = `保存に失敗しました: ${e.message || '不明なエラー'}`;
         statusEl.className = 'status-line err';
         btn.disabled = false;
         return;
@@ -721,6 +808,11 @@ async function renderReservations(){
       await renderReservations();
     });
   });
+
+  // 予約一覧の更新に合わせて、カレンダー・時間帯の予約状況表示も最新化する
+  await loadCalendarMarkers();
+  renderCalendar();
+  renderTimeSlots();
 }
 
 // ---------- filter events ----------
@@ -754,8 +846,10 @@ $('saveSettings').addEventListener('click', saveSettings);
 viewYear = today.getFullYear();
 viewMonth = today.getMonth();
 $('rankTier').innerHTML = rankOptionsHtml();
-renderCalendar();
-renderTimeSlots();
+loadCalendarMarkers().then(()=>{
+  renderCalendar();
+  renderTimeSlots();
+});
 updateSelectedLine();
 loadSettings();
 renderReservations();
