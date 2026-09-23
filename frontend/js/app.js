@@ -836,6 +836,26 @@ $('filterClear').addEventListener('click', ()=>{
   renderReservations();
 });
 
+// ---------- presence (online count) ----------
+const presenceChannel = sb.channel('armas-presence', {
+  config: { presence: { key: crypto.randomUUID() } }
+});
+
+function updateOnlineCount(){
+  const state = presenceChannel.presenceState();
+  const count = Object.keys(state).length;
+  const el = $('onlineCount');
+  if(el) el.textContent = `現在のオンライン：${count}人`;
+}
+
+presenceChannel.on('presence', { event: 'sync' }, updateOnlineCount);
+
+presenceChannel.subscribe(async (status) => {
+  if(status === 'SUBSCRIBED'){
+    await presenceChannel.track({ online_at: new Date().toISOString() });
+  }
+});
+
 // ---------- settings panel toggle ----------
 $('settingsToggle').addEventListener('click', ()=>{
   $('settingsPanel').classList.toggle('open');
