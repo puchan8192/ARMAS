@@ -21,6 +21,10 @@
 - 削除確認ダイアログ・キャンセル時のディスコ通知・カレンダ上に予約状況を表示する機能を追加
 - 設計書格納
 
+## [1.2.0] - 2026-09-23
+### Added
+- システム接続人数表示機能の追加
+
 ### Changed
 - 単一HTMLファイル構成から `frontend/`（index.html, css/, js/）に分割したプロジェクト構成へ移行
 - GitHub Pagesでの公開に対応（`.github/workflows/deploy.yml`によるCI/CD）
