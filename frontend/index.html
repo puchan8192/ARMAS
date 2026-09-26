@@ -12,7 +12,7 @@
   <div class="brand">
     <h1>ARMAS</h1>
     <span class="full-name">Apex Reservation Management &amp; Alert System</span>
-    <span class="tag">v1.3.0</span>
+    <span class="tag">v1.4.0</span>
     <span id="onlineCount" class="online-badge">現在のオンライン：0人</span>
   </div>
   <button id="settingsToggle">設定</button>
@@ -22,9 +22,26 @@
   <nav class="sidebar">
     <div class="sidebar-title">MENU</div>
     <ul class="sidebar-links">
+      <li><a href="#" data-page-link="reservations" class="active">予約・カレンダー</a></li>
+      <li><a href="#" data-page-link="stats">履歴・統計</a></li>
       <li>
         <a href="https://www.ea.com/games/apex-legends" target="_blank" rel="noopener noreferrer">
           Apex Legends 公式サイト
+        </a>
+      </li>
+      <li>
+        <a href="https://github.com/puchan8192/ARMAS" target="_blank" rel="noopener noreferrer">
+          GitHubリポジトリ
+        </a>
+      </li>
+      <li>
+        <a href="https://github.com/puchan8192/ARMAS/blob/main/01_基本設計書.md" target="_blank" rel="noopener noreferrer">
+          基本設計書
+        </a>
+      </li>
+      <li>
+        <a href="https://github.com/puchan8192/ARMAS/blob/main/02_詳細設計書.md" target="_blank" rel="noopener noreferrer">
+          詳細設計書
         </a>
       </li>
     </ul>
@@ -52,7 +69,7 @@
       </p>
     </div>
 
-    <main>
+    <main class="page-view" data-page="reservations">
       <section class="card">
         <h2><span class="num">01</span> 日時を選択</h2>
         <div class="cal-nav">
@@ -109,6 +126,15 @@
         </div>
       </section>
     </main>
+
+    <div class="page-view stats-page" data-page="stats" style="display:none">
+      <section class="card">
+        <h2><span class="num">04</span> 履歴・統計</h2>
+        <div id="statsContent">
+          <div class="empty-state">読み込み中...</div>
+        </div>
+      </section>
+    </div>
   </div>
 </div>
 

@@ -10,7 +10,11 @@ import {
   loadCalendarMarkers,
 } from './reservationsApi.js';
 import { loadRepliesGrouped, saveReply } from './repliesApi.js';
-import { sendDiscordCancelNotice, sendDiscordReplyNotice } from './discordNotify.js';
+import {
+  sendDiscordCancelNotice,
+  sendDiscordReplyNotice,
+  sendDiscordJoinDecisionNotice,
+} from './discordNotify.js';
 import { renderCalendar, renderTimeSlots } from './calendarView.js';
 
 export function escapeHtml(s) {
@@ -44,8 +48,20 @@ function reservationCardHtml(r, replies) {
       `).join('')
     : '';
 
+  const isHighlighted = state.highlightResvId === r.id;
+  const joinBannerHtml = isHighlighted ? `
+    <div class="join-banner">
+      <div class="join-banner-title">Discordのリンクから開きました。この予約への参加可否を選んでください。</div>
+      <div class="row">
+        <button class="join-yes-btn" data-id="${r.id}">✅ 参加する</button>
+        <button class="join-no-btn" data-id="${r.id}">❌ 参加しない</button>
+      </div>
+    </div>
+  ` : '';
+
   return `
-    <div class="resv" data-id="${r.id}">
+    <div class="resv ${isHighlighted ? 'highlight' : ''}" data-id="${r.id}">
+      ${joinBannerHtml}
       <div class="resv-header">
         <div class="resv-status">
           <span class="${statusClass(r.status)}">${r.status}</span>
@@ -279,6 +295,51 @@ function bindReplySend(filteredItems) {
   });
 }
 
+// Discord通知のリンクから開いた際の「参加する／参加しない」ボタン。
+// クリック時にステータスを更新し、返信スレッドにも記録した上でDiscordへ回答結果を通知する。
+async function handleJoinDecision(id, decision, filteredItems) {
+  const target = filteredItems.find((r) => r.id === id);
+  const newStatus = decision === '参加する' ? '確定' : 'キャンセル';
+
+  const ok = await updateReservationStatus(id, newStatus);
+  if (!ok) {
+    window.alert('回答の記録に失敗しました。Supabaseのupdateポリシーをご確認ください。');
+    return;
+  }
+
+  try {
+    await saveReply(id, decision, `（Discordのリンクからの回答）「${decision}」を選択しました。`);
+  } catch (e) {
+    console.error('回答の返信保存に失敗:', e);
+  }
+
+  if (target) {
+    const notice = await sendDiscordJoinDecisionNotice({ ...target, status: newStatus }, decision);
+    if (!notice.sent) {
+      window.alert(`回答は記録されましたが、Discordへの通知は送信できませんでした（${notice.reason || 'Webhook未確認'}）。`);
+    }
+  }
+
+  // 一度回答したらハイライト・バナーは不要になるため解除し、URLからも `resv` を消す
+  state.highlightResvId = null;
+  const url = new URL(window.location.href);
+  url.searchParams.delete('resv');
+  window.history.replaceState({}, '', url);
+
+  renderReservations();
+}
+
+function bindJoinButtons(filteredItems) {
+  $('resvList').querySelectorAll('.join-yes-btn').forEach((btn) => {
+    btn.addEventListener('click', () => handleJoinDecision(btn.dataset.id, '参加する', filteredItems));
+  });
+  $('resvList').querySelectorAll('.join-no-btn').forEach((btn) => {
+    btn.addEventListener('click', () => handleJoinDecision(btn.dataset.id, '不参加', filteredItems));
+  });
+}
+
+let hasScrolledToHighlight = false;
+
 // eslint-disable-next-line no-use-before-define
 export async function renderReservations() {
   const items = await loadReservations();
@@ -306,6 +367,15 @@ export async function renderReservations() {
   bindReplyToggle();
   bindEditSave();
   bindReplySend(filteredItems);
+  bindJoinButtons(filteredItems);
+
+  if (state.highlightResvId && !hasScrolledToHighlight) {
+    const el = document.querySelector(`.resv[data-id="${state.highlightResvId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      hasScrolledToHighlight = true;
+    }
+  }
 
   // 予約一覧の更新に合わせて、カレンダー・時間帯の予約状況表示も最新化する
   await loadCalendarMarkers();

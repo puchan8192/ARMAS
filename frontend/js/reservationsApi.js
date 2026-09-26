@@ -26,7 +26,7 @@ export async function loadReservations() {
 }
 
 export async function saveReservation(resv) {
-  const { error } = await sb.from(RESV_TABLE).insert({
+  const { data, error } = await sb.from(RESV_TABLE).insert({
     reserved_by: resv.reservedBy,
     reserved_for: resv.reservedFor || null,
     reservation_date: resv.date,
@@ -35,8 +35,9 @@ export async function saveReservation(resv) {
     map: resv.map || null,
     rank_tier: resv.rankTier || null,
     status: '募集中',
-  });
+  }).select().single();
   if (error) throw error;
+  return data.id;
 }
 
 export async function deleteReservation(id) {
