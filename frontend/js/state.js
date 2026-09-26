@@ -13,5 +13,6 @@ export const state = {
   viewMonth: today.getMonth(),
   filters: { name: '', from: '', to: '' },
   calendarReservations: [],
+  highlightResvId: null, // Discord通知のリンクから開いたとき、対象予約をハイライトするため
   today,
 };
