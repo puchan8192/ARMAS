@@ -1,6 +1,7 @@
 import { $ } from './dom.js';
 import { loadReservations } from './reservationsApi.js';
 import { escapeHtml } from './reservationsView.js';
+import { rankColor } from './constants.js';
 
 function aggregateBy(items, keyFn) {
   const map = {};
@@ -11,11 +12,11 @@ function aggregateBy(items, keyFn) {
   return Object.entries(map).sort((a, b) => b[1] - a[1]);
 }
 
-function statListHtml(pairs) {
+function statListHtml(pairs, colorFn) {
   if (pairs.length === 0) return '<div class="stat-row"><span class="stat-label">データなし</span></div>';
   return pairs.map(([label, count]) => `
     <div class="stat-row">
-      <span class="stat-label">${escapeHtml(label)}</span>
+      <span class="stat-label"${colorFn ? ` style="color:${colorFn(label)};"` : ''}>${escapeHtml(label)}</span>
       <span class="stat-count">${count}件</span>
     </div>
   `).join('');
@@ -74,7 +75,7 @@ export async function renderStatsPage() {
       </div>
       <div class="stats-block">
         <h3>ランク帯ごとの件数</h3>
-        ${statListHtml(byRank)}
+        ${statListHtml(byRank, rankColor)}
       </div>
       <div class="stats-block">
         <h3>ステータスごとの件数</h3>

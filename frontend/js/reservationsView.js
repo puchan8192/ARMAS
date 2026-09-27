@@ -1,6 +1,8 @@
 import { $ } from './dom.js';
 import { state } from './state.js';
-import { rankOptionsHtml, statusOptionsHtml, statusClass } from './constants.js';
+import {
+  rankOptionsHtml, statusOptionsHtml, statusClass, rankChipHtml, applyRankSelectColor,
+} from './constants.js';
 import {
   loadReservations,
   deleteReservation,
@@ -16,6 +18,7 @@ import {
   sendDiscordJoinDecisionNotice,
 } from './discordNotify.js';
 import { renderCalendar, renderTimeSlots } from './calendarView.js';
+import { renderUpcomingPreview } from './upcomingPreview.js';
 
 export function escapeHtml(s) {
   return (s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -76,7 +79,7 @@ function reservationCardHtml(r, replies) {
 
       <div class="dt">${r.date} ${r.time}</div>
       <div class="who">予約者: ${escapeHtml(r.reservedBy)}${r.reservedFor ? ` → ${escapeHtml(r.reservedFor)}` : ''}</div>
-      ${r.rankTier ? `<div class="rank">現在のランク: ${escapeHtml(r.rankTier)}</div>` : ''}
+      ${r.rankTier ? `<div class="rank">現在のランク: ${rankChipHtml(r.rankTier)}</div>` : ''}
       ${r.map ? `<div class="map">参考マップ: ${r.map}</div>` : ''}
       ${r.note ? `<div class="note">${escapeHtml(r.note)}</div>` : ''}
 
@@ -148,6 +151,13 @@ function bindStatusSelects(filteredItems) {
       }
       renderReservations();
     });
+  });
+}
+
+function bindEditRankColor() {
+  $('resvList').querySelectorAll('.edit-rank').forEach((sel) => {
+    applyRankSelectColor(sel); // 描画直後に現在値の色を反映
+    sel.addEventListener('change', () => applyRankSelectColor(sel));
   });
 }
 
@@ -363,6 +373,7 @@ export async function renderReservations() {
 
   bindDeleteButtons(filteredItems);
   bindStatusSelects(filteredItems);
+  bindEditRankColor();
   bindEditToggle();
   bindReplyToggle();
   bindEditSave();
@@ -377,8 +388,9 @@ export async function renderReservations() {
     }
   }
 
-  // 予約一覧の更新に合わせて、カレンダー・時間帯の予約状況表示も最新化する
+  // 予約一覧の更新に合わせて、カレンダー・時間帯・直近の予約プレビューも最新化する
   await loadCalendarMarkers();
   renderCalendar();
   renderTimeSlots();
+  await renderUpcomingPreview();
 }

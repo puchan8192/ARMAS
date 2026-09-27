@@ -113,7 +113,7 @@ header.top .tag{
 .settings.open{display:block;}
 .settings .row, .card .row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;}
 .settings label, .card .row label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);flex:1;min-width:260px;}
-.settings input, .card .row input{
+.settings input, .card .row input, .card .row select{
   background:var(--bg);border:1px solid var(--border);color:var(--text);
   padding:9px 10px;border-radius:6px;font-size:13px;
 }
@@ -122,12 +122,12 @@ header.top .tag{
 
 main{
   max-width:1200px;margin:0 auto;padding:26px 32px 60px;
-  display:grid;grid-template-columns:1.1fr .9fr;gap:22px;
+  display:grid;grid-template-columns:1.1fr .9fr;gap:22px;align-items:start;
 }
 @media (max-width:880px){ main{grid-template-columns:1fr;} }
 
-/* 履歴・統計ページ（main.page-viewとは別に、単一カラムで表示する） */
-.stats-page{
+/* 履歴・統計ページ、予約一覧ページなど、1カラムで表示するページ共通のレイアウト */
+.single-col-page{
   max-width:1200px;margin:0 auto;padding:26px 32px 60px;
 }
 .stats-grid{
@@ -240,7 +240,30 @@ textarea{
 .map-box .next{margin-top:8px;font-size:12.5px;color:var(--muted);}
 .map-box .fallback{color:var(--muted);font-size:13px;}
 
+/* 直近の予約プレビュー（予約する画面の右カラム） */
+.upcoming-list{display:flex;flex-direction:column;gap:8px;margin-top:6px;}
+.upcoming-row{
+  display:flex;align-items:center;gap:10px;
+  border:1px solid var(--border);border-radius:8px;background:var(--panel-2);
+  padding:9px 12px;
+}
+.upcoming-dt{
+  display:flex;flex-direction:column;align-items:center;line-height:1.25;
+  min-width:52px;padding-right:10px;border-right:1px solid var(--border);
+}
+.upcoming-date{font-size:11px;color:var(--muted);}
+.upcoming-time{font-size:13.5px;font-weight:600;color:var(--accent);}
+.upcoming-who{flex:1;font-size:12.5px;color:var(--text);}
+.upcoming-who .arrow{color:var(--muted);}
+.view-all-link{
+  display:inline-block;margin-top:12px;font-size:12.5px;color:var(--accent);
+  text-decoration:none;
+}
+.view-all-link:hover{text-decoration:underline;}
+
 .list{display:flex;flex-direction:column;gap:10px;margin-top:6px;max-height:340px;overflow-y:auto;}
+/* 予約一覧を独立したページで表示する場合は、狭い枠に収めず自然な高さで表示する */
+.single-col-page .list{max-height:none;overflow-y:visible;}
 .resv{
   border:1px solid var(--border);border-radius:8px;padding:12px 14px;background:var(--panel-2);
 }
@@ -259,6 +282,16 @@ textarea{
 .resv .dt{font-weight:600;font-size:14px;}
 .resv .who{font-size:12.5px;color:var(--muted);margin-top:4px;}
 .resv .rank{font-size:12px;color:var(--text);margin-top:3px;}
+
+/* ランク帯ごとの色分けチップ（予約一覧・編集フォーム・統計ページで共通使用） */
+.rank-chip{
+  display:inline-block;font-weight:600;font-size:12px;
+  color:var(--rank-color);
+  padding:1px 8px;border-radius:20px;
+  border:1px solid var(--rank-color);
+  background:var(--panel-2); /* color-mix()未対応ブラウザ向けフォールバック */
+  background:color-mix(in srgb, var(--rank-color) 16%, transparent);
+}
 .resv .map{font-size:12px;color:var(--accent);margin-top:3px;}
 .resv .note{font-size:12.5px;color:var(--muted);margin-top:6px;white-space:pre-wrap;}
 .empty-state{color:var(--muted);font-size:13px;padding:14px 0;}

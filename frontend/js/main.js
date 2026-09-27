@@ -1,6 +1,6 @@
 import { $ } from './dom.js';
 import { state } from './state.js';
-import { rankOptionsHtml } from './constants.js';
+import { rankOptionsHtml, applyRankSelectColor } from './constants.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { loadCalendarMarkers } from './reservationsApi.js';
 import {
@@ -14,7 +14,7 @@ import { initReservationForm } from './reservationForm.js';
 import { initFilters } from './filters.js';
 import { initPresence, initPresenceNameSync } from './presence.js';
 import { initRealtimeSync } from './realtime.js';
-import { initPages } from './pages.js';
+import { initPages, showPage } from './pages.js';
 
 function initSettingsPanel() {
   $('settingsToggle').addEventListener('click', () => {
@@ -33,6 +33,8 @@ function readHighlightFromUrl() {
 
 async function init() {
   $('rankTier').innerHTML = rankOptionsHtml();
+  applyRankSelectColor($('rankTier'));
+  $('rankTier').addEventListener('change', () => applyRankSelectColor($('rankTier')));
   readHighlightFromUrl();
 
   initCalendarNav();
@@ -43,6 +45,10 @@ async function init() {
   initPresenceNameSync();
   initRealtimeSync();
   initPages();
+
+  // Discordの回答リンク（?resv=予約ID）から開かれた場合は、
+  // 予約一覧ページを最初から表示し、対象カードを見つけやすくする
+  if (state.highlightResvId) showPage('list');
 
   await loadCalendarMarkers();
   renderCalendar();
