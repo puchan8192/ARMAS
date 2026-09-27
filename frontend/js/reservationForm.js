@@ -46,8 +46,9 @@ export function initReservationForm() {
       map,
     };
 
+    let newId;
     try {
-      await saveReservation(resv);
+      newId = await saveReservation(resv);
     } catch (e) {
       console.error(e);
       $('reserveStatus').textContent = '予約の保存に失敗しました（DB接続をご確認ください）';
@@ -56,7 +57,7 @@ export function initReservationForm() {
       return;
     }
 
-    const notice = await sendDiscordNotice(resv);
+    const notice = await sendDiscordNotice({ ...resv, id: newId });
 
     $('reserveStatus').textContent = notice.sent
       ? '予約が完了し、Discordへ通知しました。'
