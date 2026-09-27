@@ -62,16 +62,31 @@ Deno.serve(async (req) => {
     for (const event of payload.events ?? []) {
       const source = (event as { source?: { type?: string; groupId?: string; userId?: string } }).source ?? {};
 
+      let lineId: string | undefined;
+      let kind: 'group' | 'user' | undefined;
+      let label: string | undefined;
+
       if (source.type === 'group' && source.groupId) {
-        await supabase.from('line_targets').upsert(
-          { line_id: source.groupId, kind: 'group', label: 'ARMAS通知グループ' },
-          { onConflict: 'line_id' },
-        );
+        lineId = source.groupId;
+        kind = 'group';
+        label = 'ARMAS通知グループ';
       } else if (source.type === 'user' && source.userId) {
-        await supabase.from('line_targets').upsert(
-          { line_id: source.userId, kind: 'user', label: '個人' },
-          { onConflict: 'line_id' },
-        );
+        lineId = source.userId;
+        kind = 'user';
+        label = '個人';
+      }
+
+      if (!lineId) continue;
+
+      // すでに登録済みなら何もしない（発言のたびに無駄な書き込みをしないため）
+      const { data: existing } = await supabase
+        .from('line_targets')
+        .select('line_id')
+        .eq('line_id', lineId)
+        .maybeSingle();
+
+      if (!existing) {
+        await supabase.from('line_targets').insert({ line_id: lineId, kind, label });
       }
     }
   }

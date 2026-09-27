@@ -14,6 +14,8 @@
   - `notify-line`: 予約・返信・キャンセル・参加可否回答の通知をLINE Messaging API経由でpush送信
   - `line-webhook`: LINE側のWebhookを受け取り、グループ/個人のIDを`line_targets`テーブルへ自動登録（手動でのID取得作業が不要）
   - 新規予約・返信・キャンセル・参加可否回答のDiscord通知は、今後LINEへも同時送信される
+### Fixed
+- `line-webhook`が、グループ内の発言のたびに無条件でDB書き込み(upsert)していた点を修正。登録済みかを確認してから、未登録の場合のみ書き込むように変更
 
 ## [1.4.4] - 2026-09-27
 ### Changed
