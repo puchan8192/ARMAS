@@ -19,10 +19,10 @@ async function postToWebhook(content) {
 // 呼び出し元の既存コードとの互換性のため、戻り値のsent/reasonはこれまで通り
 // Discordの送信結果を表す。LINE側の結果は`lineSent`として別途持たせ、
 // 失敗時はコンソールにログを残す（LINE未設定でもDiscord通知の妨げにはしない）。
-async function postToAllChannels(content) {
+async function postToAllChannels(content, lineFields) {
   const [discordResult, lineResult] = await Promise.all([
     postToWebhook(content),
-    sendLineNotice(content),
+    sendLineNotice(lineFields),
   ]);
   if (!lineResult.sent) {
     console.warn('LINEへの通知に失敗しました:', lineResult.reason);
@@ -52,7 +52,20 @@ export function sendDiscordNotice(resv) {
     + (resv.map ? `参考ランクマップ（予約時点）: ${resv.map}\n` : '')
     + (resv.note ? `備考: ${resv.note}\n` : '備考: なし\n')
     + (link ? `\n▶ 参加する／参加しないはこちらから回答してください:\n${link}` : '');
-  return postToAllChannels(content);
+
+  const lineFields = {
+    kind: 'new',
+    date: resv.date,
+    time: resv.time,
+    reservedBy: resv.reservedBy,
+    reservedFor: resv.reservedFor,
+    rankTier: resv.rankTier,
+    map: resv.map,
+    note: resv.note,
+    link,
+  };
+
+  return postToAllChannels(content, lineFields);
 }
 
 export function sendDiscordJoinDecisionNotice(resv, decision) {
@@ -61,7 +74,17 @@ export function sendDiscordJoinDecisionNotice(resv, decision) {
     + `日時: ${resv.date} ${resv.time}\n`
     + `予約者: ${resv.reservedBy}${resv.reservedFor ? ` → ${resv.reservedFor}` : ''}\n`
     + `回答: ${decision}`;
-  return postToAllChannels(content);
+
+  const lineFields = {
+    kind: 'join',
+    date: resv.date,
+    time: resv.time,
+    reservedBy: resv.reservedBy,
+    reservedFor: resv.reservedFor,
+    decision,
+  };
+
+  return postToAllChannels(content, lineFields);
 }
 
 export function sendDiscordCancelNotice(resv) {
@@ -70,7 +93,18 @@ export function sendDiscordCancelNotice(resv) {
     + `予約者: ${resv.reservedBy}${resv.reservedFor ? ` → ${resv.reservedFor}` : ''}\n`
     + (resv.rankTier ? `現在のランク: ${resv.rankTier}\n` : '')
     + (resv.note ? `備考: ${resv.note}` : '備考: なし');
-  return postToAllChannels(content);
+
+  const lineFields = {
+    kind: 'cancel',
+    date: resv.date,
+    time: resv.time,
+    reservedBy: resv.reservedBy,
+    reservedFor: resv.reservedFor,
+    rankTier: resv.rankTier,
+    note: resv.note,
+  };
+
+  return postToAllChannels(content, lineFields);
 }
 
 export function sendDiscordReplyNotice(resv, repliedBy, message) {
@@ -81,5 +115,17 @@ export function sendDiscordReplyNotice(resv, repliedBy, message) {
     + `対象の予約: ${target}\n`
     + `予約時のメッセージ: ${resv.note ? resv.note : 'なし'}\n`
     + `返信${repliedBy ? `（${repliedBy}より）` : ''}: ${message}`;
-  return postToAllChannels(content);
+
+  const lineFields = {
+    kind: 'reply',
+    date: resv.date,
+    time: resv.time,
+    reservedBy: resv.reservedBy,
+    reservedFor: resv.reservedFor,
+    note: resv.note,
+    repliedBy,
+    message,
+  };
+
+  return postToAllChannels(content, lineFields);
 }
