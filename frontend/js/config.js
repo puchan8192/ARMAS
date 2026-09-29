@@ -8,6 +8,7 @@ export const sb = window.supabase.createClient(
 
 export const RESV_TABLE = 'reservations';
 export const REPLY_TABLE = 'replies';
+export const APP_SETTINGS_TABLE = 'app_settings';
 export const MAP_API_BASE = 'https://api.mozambiquehe.re/maprotation';
 
 // SupabaseのプロジェクトURLから、LINE通知用Edge FunctionのURLを組み立てる
