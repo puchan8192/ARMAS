@@ -15,4 +15,6 @@ export const state = {
   calendarReservations: [],
   highlightResvId: null, // Discord通知のリンクから開いたとき、対象予約をハイライトするため
   today,
+  currentUser: null, // { id, email, role, displayName } | null
 };
+
