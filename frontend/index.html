@@ -8,11 +8,23 @@
 </head>
 <body>
 
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <h1>ARMAS</h1>
+    <p class="full-name">Apex Reservation Management &amp; Alert System</p>
+    <input id="loginEmail" type="email" placeholder="メールアドレス">
+    <input id="loginPassword" type="password" placeholder="パスワード">
+    <button id="loginBtn">ログイン</button>
+    <div class="status-line" id="loginStatus"></div>
+  </div>
+</div>
+
+<div id="appRoot" style="display:none;">
 <header class="top">
   <div class="brand">
     <h1>ARMAS</h1>
     <span class="full-name">Apex Reservation Management &amp; Alert System</span>
-    <span class="tag">v1.5.1</span>
+    <span class="tag">v1.6.0</span>
     <span id="onlineCount" class="online-badge">現在のオンライン：0人</span>
   </div>
   <button id="settingsToggle">設定</button>
@@ -36,6 +48,19 @@
         </a>
       </li>
     </ul>
+
+    <!-- 管理者ログイン時のみ表示。js/sidebar.jsがroleに応じて中身とdisplayを制御する -->
+    <div class="sidebar-title admin-only" id="adminLinksTitle" style="display:none;">ADMIN</div>
+    <ul class="sidebar-links admin-links" id="adminLinks" style="display:none;">
+      <!-- js/sidebar.jsが動的に描画（設計書・GitHubリンクなど） -->
+    </ul>
+
+    <div class="sidebar-auth" id="sidebarAuth">
+      <div class="user-info" id="userInfo">
+      <span id="userDisplayName"></span>
+      <button id="logoutBtn">ログアウト</button>
+    </div>
+  </div>
   </nav>
 
   <div class="page">
@@ -137,6 +162,7 @@
       </section>
     </div>
   </div>
+</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

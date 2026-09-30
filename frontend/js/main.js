@@ -15,12 +15,46 @@ import { initFilters } from './filters.js';
 import { initPresence, initPresenceNameSync } from './presence.js';
 import { initRealtimeSync } from './realtime.js';
 import { initPages, showPage } from './pages.js';
+import { watchAuthState, signIn, signOut } from './auth.js';
+import { renderSidebar } from './sidebar.js';
 
 function initSettingsPanel() {
   $('settingsToggle').addEventListener('click', () => {
     $('settingsPanel').classList.toggle('open');
   });
   $('saveSettings').addEventListener('click', saveSettings);
+}
+
+function initAuthUI() {
+  $('loginBtn').addEventListener('click', async () => {
+    const email = $('loginEmail').value.trim();
+    const password = $('loginPassword').value;
+    $('loginStatus').textContent = 'ログイン中...';
+    $('loginStatus').className = 'status-line';
+    try {
+      await signIn(email, password);
+      $('loginStatus').textContent = '';
+    } catch (e) {
+      console.error(e);
+      $('loginStatus').textContent = 'ログインに失敗しました（メールアドレスまたはパスワードをご確認ください）';
+      $('loginStatus').className = 'status-line err';
+    }
+  });
+
+  $('logoutBtn').addEventListener('click', async () => {
+    await signOut();
+  });
+
+  watchAuthState((currentUser) => {
+    renderSidebar(currentUser);
+    $('loginScreen').style.display = currentUser ? 'none' : 'flex';
+    $('appRoot').style.display = currentUser ? 'block' : 'none';
+    if (currentUser) {
+      $('userDisplayName').textContent = currentUser.displayName;
+      $('loginEmail').value = '';
+      $('loginPassword').value = '';
+    }
+  });
 }
 
 // Discord通知のリンク（?resv=予約ID）から開かれた場合、
@@ -45,6 +79,10 @@ async function init() {
   initPresenceNameSync();
   initRealtimeSync();
   initPages();
+  initAuthUI();
+
+  // ログイン状態が確定するまでは管理者リンクを隠した状態で表示しておく
+  renderSidebar(null);
 
   // Discordの回答リンク（?resv=予約ID）から開かれた場合は、
   // 予約一覧ページを最初から表示し、対象カードを見つけやすくする
