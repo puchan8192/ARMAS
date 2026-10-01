@@ -14,7 +14,11 @@ function linkItemHtml({ label, url }) {
 // 既存のページ切り替えリンク（予約する／予約一覧／履歴・統計 等）はここでは一切触らない。
 export function renderSidebar(currentUser) {
   const isAdmin = !!currentUser && currentUser.role === 'admin';
-  $('adminLinksTitle').style.display = isAdmin ? 'block' : 'none';
-  $('adminLinks').style.display = isAdmin ? 'block' : 'none';
-  $('adminLinks').innerHTML = isAdmin ? ADMIN_LINKS.map(linkItemHtml).join('') : '';
+  const titleEl = $('adminLinksTitle');
+  const linksEl = $('adminLinks');
+  if (titleEl) titleEl.style.display = isAdmin ? 'block' : 'none';
+  if (linksEl) {
+    linksEl.style.display = isAdmin ? 'block' : 'none';
+    linksEl.innerHTML = isAdmin ? ADMIN_LINKS.map(linkItemHtml).join('') : '';
+  }
 }
