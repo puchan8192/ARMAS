@@ -49,8 +49,11 @@ function initAuthUI() {
     renderSidebar(currentUser);
     $('loginScreen').style.display = currentUser ? 'none' : 'flex';
     $('appRoot').style.display = currentUser ? 'block' : 'none';
+    $('headerUser').style.display = currentUser ? 'flex' : 'none';
+
     if (currentUser) {
-      $('userDisplayName').textContent = currentUser.displayName;
+      $('userDisplayName').textContent = currentUser.email;
+      $('adminBadge').style.display = currentUser.role === 'admin' ? 'inline-block' : 'none';
       $('loginEmail').value = '';
       $('loginPassword').value = '';
     }
