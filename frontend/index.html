@@ -27,6 +27,12 @@
     <span class="tag">v1.6.0</span>
     <span id="onlineCount" class="online-badge">現在のオンライン：0人</span>
   </div>
+
+    <div class="header-user" id="headerUser">
+    <span id="userDisplayName"></span>
+    <span id="adminBadge" class="admin-badge">ADMIN</span>
+  </div>
+
   <button id="settingsToggle">設定</button>
 </header>
 
@@ -51,16 +57,9 @@
 
     <!-- 管理者ログイン時のみ表示。js/sidebar.jsがroleに応じて中身とdisplayを制御する -->
     <div class="sidebar-title admin-only" id="adminLinksTitle" style="display:none;">ADMIN</div>
-    <ul class="sidebar-links admin-links" id="adminLinks" style="display:none;">
-      <!-- js/sidebar.jsが動的に描画（設計書・GitHubリンクなど） -->
-    </ul>
+    <ul class="sidebar-links admin-links" id="adminLinks" style="display:none;"></ul>
 
-    <div class="sidebar-auth" id="sidebarAuth">
-      <div class="user-info" id="userInfo">
-      <span id="userDisplayName"></span>
-      <button id="logoutBtn">ログアウト</button>
-    </div>
-  </div>
+  <button id="logoutBtn" class="sidebar-logout">ログアウト</button>
   </nav>
 
   <div class="page">

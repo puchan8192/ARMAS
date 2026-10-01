@@ -38,6 +38,8 @@ h1,h2,h3,.mono{font-family:"Oswald","Hiragino Sans",sans-serif;}
   border-right:1px solid var(--border);
   padding:24px 0;
   min-height:100vh;
+  display:flex;
+  flex-direction:column;
 }
 .sidebar-title{
   font-family:"Oswald",sans-serif;
@@ -79,6 +81,25 @@ h1,h2,h3,.mono{font-family:"Oswald","Hiragino Sans",sans-serif;}
 /* ページ切り替え用リンク（外部リンクではないので矢印は付けない） */
 .sidebar-links a[data-page-link]::after{ content:""; }
 .sidebar-links a[data-page-link].active{ color:var(--accent); font-weight:600; }
+
+.sidebar-logout{
+  margin-top:16px; /* サイドバー内の余白を使って常に最下部へ押し下げる */
+  margin-left:16px;
+  margin-right:16px;
+  margin-bottom:16px;
+  padding:9px 0;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:none;
+  color:var(--muted);
+  font-size:13px;
+  cursor:pointer;
+}
+.sidebar-logout:hover{
+  border-color:var(--danger);
+  color:var(--danger);
+}
+
 @media (max-width:720px){
   .body-layout{ flex-direction:column; }
   .sidebar{
@@ -101,6 +122,26 @@ header.top .tag{
   font-size:11px;color:var(--accent);border:1px solid var(--accent-dim);
   padding:3px 8px;border-radius:3px;letter-spacing:.08em;
 }
+
+/* ヘッダー中央：ログイン中のメールアドレス＋管理者バッジ */
+.header-user{
+  display:none; /* 初期は非表示。ログイン後にJSでflexへ切り替え */
+  align-items:center;
+  gap:8px;
+  font-size:13px;
+  color:var(--text);
+}
+.admin-badge{
+  display:none; /* 管理者のときだけJSでinline-blockへ切り替え */
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.08em;
+  color:var(--accent);
+  border:1px solid var(--accent-dim);
+  padding:2px 7px;
+  border-radius:3px;
+}
+
 #settingsToggle{
   background:none;border:1px solid var(--border);color:var(--muted);
   padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px;
