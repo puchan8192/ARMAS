@@ -40,6 +40,27 @@ export function applyFilters(items) {
   });
 }
 
+const STATUS_ORDER = { '募集中': 0, '確定': 1, 'キャンセル': 2 };
+
+export function applySort(items) {
+  const sorted = [...items];
+  switch (state.sort) {
+    case 'date_desc':
+      sorted.sort((a, b) => (`${a.date}${a.time}` < `${b.date}${b.time}` ? 1 : -1));
+      break;
+    case 'reservedBy':
+      sorted.sort((a, b) => (a.reservedBy || '').localeCompare(b.reservedBy || '', 'ja'));
+      break;
+    case 'status':
+      sorted.sort((a, b) => (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99));
+      break;
+    case 'date_asc':
+    default:
+      sorted.sort((a, b) => (`${a.date}${a.time}` < `${b.date}${b.time}` ? -1 : 1));
+  }
+  return sorted;
+}
+
 function reservationCardHtml(r, replies) {
   const repliesHtml = replies.length
     ? replies.map((rep) => `
@@ -359,7 +380,7 @@ export async function renderReservations() {
     return;
   }
 
-  const filteredItems = applyFilters(items);
+  const filteredItems = applySort(applyFilters(items));
   if (filteredItems.length === 0) {
     $('resvList').innerHTML = '<div class="empty-state">条件に一致する予約はありません。</div>';
     return;
