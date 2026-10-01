@@ -22,4 +22,9 @@ export function initFilters() {
     $('filterTo').value = '';
     renderReservations();
   });
+
+  $('sortSelect').addEventListener('change', () => {
+    state.sort = $('sortSelect').value;
+    renderReservations();
+  });
 }

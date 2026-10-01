@@ -12,6 +12,7 @@ export const state = {
   viewYear: today.getFullYear(),
   viewMonth: today.getMonth(),
   filters: { name: '', from: '', to: '' },
+  sort: 'date_asc', // 追加：'date_asc' | 'date_desc' | 'reservedBy' | 'status'
   calendarReservations: [],
   highlightResvId: null, // Discord通知のリンクから開いたとき、対象予約をハイライトするため
   today,
