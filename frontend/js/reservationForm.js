@@ -5,9 +5,46 @@ import { currentMapSnapshot } from './mapRotation.js';
 import { sendDiscordNotice } from './discordNotify.js';
 import { renderTimeSlots, updateSelectedLine } from './calendarView.js';
 import { renderReservations } from './reservationsView.js';
+import { shouldOpenRoute, openRouteGuide } from './routeGuide.js';
+
+// 経路案内のみ実行する（DB保存・Discord通知は行わない）
+async function handleRouteGuide() {
+  const status = $('reserveStatus');
+  $('reserveBtn').disabled = true;
+  status.textContent = '現在地を取得しています...（位置情報の許可を求められたら「許可」を選んでください）';
+  status.className = 'status-line';
+
+  const result = await openRouteGuide();
+
+  status.className = 'status-line ok';
+  status.textContent = '';
+  if (result.blocked) {
+    // ポップアップがブロックされた場合は、クリックなら確実に開けるのでリンクを出す
+    const a = document.createElement('a');
+    a.href = result.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = 'Googleマップで経路案内を開く';
+    status.append('ポップアップがブロックされました。→ ', a);
+  } else {
+    status.textContent = 'Googleマップで経路案内を開きました。';
+  }
+  if (result.reason) {
+    status.append(`（${result.reason}のため、出発地はGoogleマップ側の現在地です）`);
+  }
+  status.append('予約は登録していません。');
+  $('reserveBtn').disabled = false;
+}
 
 export function initReservationForm() {
   $('reserveBtn').addEventListener('click', async () => {
+    // 管理者(admin)かつ備考に「プレジオ」を含む場合は、予約を登録せず経路案内だけを開く。
+    // 日時の選択・予約者の入力も不要なので、他のチェックより先に判定する。
+    if (shouldOpenRoute($('notes').value)) {
+      await handleRouteGuide();
+      return;
+    }
+
     if (!state.selectedDate || !state.selectedTime) return;
 
     const reservedBy = $('reservedBy').value.trim();
