@@ -22,6 +22,8 @@ export async function loadReservations() {
     map: r.map,
     rankTier: r.rank_tier,
     status: r.status || '募集中',
+    capacity: r.capacity || 3,
+    createdAt: r.created_at,
   }));
 }
 
@@ -34,6 +36,7 @@ export async function saveReservation(resv) {
     note: resv.note || null,
     map: resv.map || null,
     rank_tier: resv.rankTier || null,
+    capacity: resv.capacity || 3,
     status: '募集中',
   }).select().single();
   if (error) throw error;
@@ -82,6 +85,7 @@ export async function updateReservation(id, patch) {
     rank_tier: patch.rankTier || null,
     reserved_for: patch.reservedFor || null,
     note: patch.note || null,
+    ...(patch.capacity ? { capacity: patch.capacity } : {}),
   }).eq('id', id).select();
   if (error) throw error;
   if (!data || data.length === 0) {

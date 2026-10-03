@@ -1,6 +1,8 @@
 import { $ } from './dom.js';
 import { state } from './state.js';
-import { findConflicting, saveReservation } from './reservationsApi.js';
+import { findConflicting, saveReservation, loadReservations } from './reservationsApi.js';
+import { rankGapMessage } from './constants.js';
+import { loadAllParticipants, latestRanks } from './partyApi.js';
 import { currentMapSnapshot } from './mapRotation.js';
 import { sendDiscordNotice } from './discordNotify.js';
 import { renderTimeSlots, updateSelectedLine } from './calendarView.js';
@@ -54,6 +56,20 @@ export function initReservationForm() {
       return;
     }
 
+    // ランク差チェック：自分のランクと、予約先に書かれた名前の人の「最後に記録されたランク」を比べる
+    const myRank = $('rankTier').value;
+    const targetNames = $('reservedFor').value.split(/[、,，/／\s]+/).map((n) => n.trim()).filter(Boolean);
+    if (myRank && targetNames.length > 0) {
+      const [allResvs, allParts] = await Promise.all([loadReservations(), loadAllParticipants()]);
+      const known = latestRanks(allResvs, allParts);
+      const gap = rankGapMessage([myRank, ...targetNames.map((n) => known[n]).filter(Boolean)]);
+      if (gap && !window.confirm(`${gap}\nそのまま予約しますか？`)) {
+        $('reserveStatus').textContent = '登録をキャンセルしました。';
+        $('reserveStatus').className = 'status-line';
+        return;
+      }
+    }
+
     // 重複チェック：同じ日時にすでに有効な予約がないか確認
     const conflicts = await findConflicting(state.selectedDate, state.selectedTime);
     if (conflicts.length > 0) {
@@ -79,6 +95,7 @@ export function initReservationForm() {
       reservedBy,
       reservedFor: $('reservedFor').value.trim(),
       rankTier: $('rankTier').value,
+      capacity: Number($('capacity').value) || 3,
       note: $('notes').value.trim(),
       map,
     };

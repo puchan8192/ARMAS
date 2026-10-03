@@ -1,6 +1,7 @@
 import { $ } from './dom.js';
 import { state } from './state.js';
 import { MAP_API_BASE } from './config.js';
+import { renderMapSchedule, renderFavoriteMaps } from './mapExtras.js';
 
 let mapTimerInterval = null;
 let mapRemainingSecs = null;
@@ -38,6 +39,7 @@ export async function fetchMapRotation() {
   stopMapTimer();
   if (!state.settings.apexKey) {
     $('mapBox').innerHTML = '<p class="fallback">APIキー未設定のため取得できません。設定からAPIキーを登録してください。</p>';
+    renderFavoriteMaps('', ''); // お気に入りの登録（サーバー側の通知用）はAPIキー無しでも行える
     return;
   }
   $('mapBox').innerHTML = '<p class="fallback">取得中...</p>';
@@ -57,6 +59,8 @@ export async function fetchMapRotation() {
       <div class="next">次のマップ: ${next.map || '不明'}</div>
       <p class="hint" style="margin-top:10px;">※このAPIは「現在」と「次」のマップしか取得できません。数日後などの予約に対しては、予約時点の直近ローテーションを参考値として記録します。</p>
     `;
+    renderMapSchedule(cur, next);
+    renderFavoriteMaps(cur.map, next.map);
     if (hasTimer) {
       mapRemainingSecs = cur.remainingSecs;
       mapTimerInterval = setInterval(tickMapTimer, 1000);

@@ -71,3 +71,45 @@ export function statusClass(status) {
   if (status === 'キャンセル') return 'status-badge cancelled';
   return 'status-badge open';
 }
+
+// ---------- ランクの数値化・ランク差の判定 ----------
+
+// ランク帯(Rookie=0 … Apex Predator=7)の番号
+export function rankGroupIndex(rank) {
+  const name = rankGroupName(rank);
+  return RANK_GROUPS.findIndex((g) => g.group === name);
+}
+
+// グラフ・目標の進捗用に、ランクを1段階=1ずつ増える数値にする（Rookie IV=0 … Bronze IV=4 …）
+// Master・Apex Predatorはサブ区分が無いので、それぞれ24・28とする。
+export function rankScore(rank) {
+  const gi = rankGroupIndex(rank);
+  if (gi < 0) return null;
+  const m = (rank || '').match(/\s+(IV|III|II|I)$/);
+  const sub = m ? ['IV', 'III', 'II', 'I'].indexOf(m[1]) : 0;
+  return gi * 4 + sub;
+}
+
+// スコアをランク名に戻す（グラフの軸ラベル用）
+export function rankFromScore(score) {
+  const gi = Math.min(RANK_GROUPS.length - 1, Math.max(0, Math.floor(score / 4)));
+  const g = RANK_GROUPS[gi];
+  if (g.subs.length === 0) return g.group;
+  return `${g.group} ${g.subs[Math.min(3, Math.max(0, Math.round(score - gi * 4)))]}`;
+}
+
+// これ以上ランク帯が離れていると警告を出す（ランク帯の番号の差）。
+// Apexのランクマッチのパーティー制限はシーズンによって変わるため、あくまで「目安」の値。
+// 最新の公式ルールに合わせて調整してください。
+export const RANK_GAP_WARN_GROUPS = 2;
+
+// ランクの配列から、離れすぎている場合の警告文を返す（問題なければ空文字）
+export function rankGapMessage(ranks) {
+  const idx = ranks.map((r) => rankGroupIndex(r)).filter((i) => i >= 0);
+  if (idx.length < 2) return '';
+  const lo = Math.min(...idx);
+  const hi = Math.max(...idx);
+  if (hi - lo < RANK_GAP_WARN_GROUPS) return '';
+  return `${RANK_GROUPS[lo].group}と${RANK_GROUPS[hi].group}はランク帯が${hi - lo}段階離れています。`
+    + 'ランクマッチのパーティー制限（マッチングできない・ポイント変動が大きくなる等）に注意してください。';
+}

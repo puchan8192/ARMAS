@@ -17,6 +17,7 @@ import { initRealtimeSync } from './realtime.js';
 import { initPages, showPage } from './pages.js';
 import { watchAuthState, signIn, signOut } from './auth.js';
 import { renderSidebar } from './sidebar.js';
+import { refreshFavoriteMaps } from './mapExtras.js';
 
 function initSettingsPanel() {
   $('settingsToggle').addEventListener('click', () => {
@@ -56,6 +57,8 @@ function initAuthUI() {
       $('adminBadge').style.display = currentUser.role === 'admin' ? 'inline-block' : 'none';
       $('loginEmail').value = '';
       $('loginPassword').value = '';
+      refreshFavoriteMaps();
+      renderReservations(); // 参加ボタンの「自分の名前」「既定ランク」をログイン後の情報で反映
     }
   });
 }
@@ -83,6 +86,13 @@ async function init() {
   initRealtimeSync();
   initPages();
   initAuthUI();
+
+  // マップの時間帯から「この時間で予約」を押したとき、カレンダーと時間枠を選択状態に更新する
+  document.addEventListener('armas:slot-picked', () => {
+    renderCalendar();
+    renderTimeSlots();
+    updateSelectedLine();
+  });
 
   // ログイン状態が確定するまでは管理者リンクを隠した状態で表示しておく
   renderSidebar(null);

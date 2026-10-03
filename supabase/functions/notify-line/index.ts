@@ -31,7 +31,7 @@ function json(body: unknown, status = 200) {
 }
 
 type NoticeFields = {
-  kind: 'new' | 'reply' | 'cancel' | 'join';
+  kind: 'new' | 'reply' | 'cancel' | 'join' | 'full';
   date?: string;
   time?: string;
   reservedBy?: string;
@@ -43,6 +43,9 @@ type NoticeFields = {
   repliedBy?: string;
   message?: string;
   decision?: string;
+  member?: string;
+  progress?: string;
+  capacity?: number;
 };
 
 const COLOR = {
@@ -127,6 +130,7 @@ function buildBubble(fields: NoticeFields) {
       row('予約者', fields.reservedBy),
       row('予約先', fields.reservedFor),
       row('ランク', fields.rankTier),
+      fields.capacity ? row('募集人数', `${fields.capacity}人パーティー（予約者含む）`) : null,
       row('参考マップ', fields.map),
       row('備考', fields.note || 'なし'),
     );
@@ -155,7 +159,18 @@ function buildBubble(fields: NoticeFields) {
     boxColor = isYes ? COLOR.ok : COLOR.danger;
     rows.push(
       row('予約者', `${fields.reservedBy || ''}${fields.reservedFor ? ` → ${fields.reservedFor}` : ''}`),
+      row('回答者', fields.member),
       row('回答', fields.decision),
+      row('参加状況', fields.progress),
+    );
+  } else if (fields.kind === 'full') {
+    title = '🎉 メンバーが揃い、予約が確定しました';
+    titleColor = COLOR.ok;
+    boxColor = COLOR.ok;
+    rows.push(
+      row('予約者', fields.reservedBy),
+      row('メンバー', fields.member),
+      row('人数', fields.progress),
     );
   }
 
@@ -192,7 +207,8 @@ function buildAltText(fields: NoticeFields): string {
   if (fields.kind === 'new') return `新しい予約: ${fields.date} ${fields.time} (${fields.reservedBy})`;
   if (fields.kind === 'reply') return `予約への返信: ${fields.message || ''}`;
   if (fields.kind === 'cancel') return `予約がキャンセルされました: ${fields.date} ${fields.time}`;
-  if (fields.kind === 'join') return `参加可否の回答: ${fields.decision}`;
+  if (fields.kind === 'join') return `参加可否の回答: ${fields.member || ''} ${fields.decision}`;
+  if (fields.kind === 'full') return `予約が確定しました: ${fields.date} ${fields.time}`;
   return 'ARMASからの通知';
 }
 

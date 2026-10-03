@@ -49,6 +49,7 @@ export function sendDiscordNotice(resv) {
     + `予約者: ${resv.reservedBy}\n`
     + (resv.reservedFor ? `予約先: ${resv.reservedFor}\n` : '')
     + (resv.rankTier ? `現在のランク: ${resv.rankTier}\n` : '')
+    + (resv.capacity ? `募集人数: ${resv.capacity}人パーティー（予約者含む）\n` : '')
     + (resv.map ? `参考ランクマップ（予約時点）: ${resv.map}\n` : '')
     + (resv.note ? `備考: ${resv.note}\n` : '備考: なし\n')
     + (link ? `\n▶ 参加する／参加しないはこちらから回答してください:\n${link}` : '');
@@ -62,18 +63,22 @@ export function sendDiscordNotice(resv) {
     rankTier: resv.rankTier,
     map: resv.map,
     note: resv.note,
+    capacity: resv.capacity,
     link,
   };
 
   return postToAllChannels(content, lineFields);
 }
 
-export function sendDiscordJoinDecisionNotice(resv, decision) {
+export function sendDiscordJoinDecisionNotice(resv, decision, member, party) {
   const emoji = decision === '参加する' ? '✅' : '❌';
+  const progress = party ? `${party.count}/${party.capacity}人${party.free > 0 ? `（残り${party.free}枠）` : '（満員）'}` : '';
   const content = `${emoji} **参加可否の回答がありました**\n`
     + `日時: ${resv.date} ${resv.time}\n`
     + `予約者: ${resv.reservedBy}${resv.reservedFor ? ` → ${resv.reservedFor}` : ''}\n`
-    + `回答: ${decision}`;
+    + (member ? `回答者: ${member}\n` : '')
+    + `回答: ${decision}`
+    + (progress ? `\n参加状況: ${progress}` : '');
 
   const lineFields = {
     kind: 'join',
@@ -82,6 +87,27 @@ export function sendDiscordJoinDecisionNotice(resv, decision) {
     reservedBy: resv.reservedBy,
     reservedFor: resv.reservedFor,
     decision,
+    member,
+    progress,
+  };
+
+  return postToAllChannels(content, lineFields);
+}
+
+// 募集人数に達して自動で「確定」になったときの通知
+export function sendDiscordPartyFullNotice(resv, party) {
+  const names = party.joined.map((j) => j.name).join('、');
+  const content = '🎉 **メンバーが揃い、予約が確定しました**\n'
+    + `日時: ${resv.date} ${resv.time}\n`
+    + `メンバー（${party.count}/${party.capacity}人）: ${names}`;
+
+  const lineFields = {
+    kind: 'full',
+    date: resv.date,
+    time: resv.time,
+    reservedBy: resv.reservedBy,
+    progress: `${party.count}/${party.capacity}人`,
+    member: names,
   };
 
   return postToAllChannels(content, lineFields);
