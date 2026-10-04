@@ -428,6 +428,10 @@ textarea{
   padding:7px 12px;border-radius:6px;cursor:pointer;font-size:12px;
 }
 .filter-bar button:hover{border-color:var(--accent);color:var(--text);}
+.filter-bar select{
+  background:var(--panel-2);border:1px solid var(--border);color:var(--text);
+  padding:7px 9px;border-radius:6px;font-size:12.5px;
+}
 
 /* ---- スマホ幅（iPhone等）向けの調整 ---- */
 @media (max-width:600px){

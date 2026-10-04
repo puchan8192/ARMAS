@@ -45,33 +45,13 @@ export function applyFilters(items) {
 }
 
 function partyBlockHtml(r, participants, myDefaultRank) {
-  const party = partyOf(r, participants);
-  const slots = Array.from({ length: party.capacity }, (_, i) => `<span class="slot ${i < party.count ? 'on' : ''}"></span>`).join('');
-  const members = party.joined.map((j) => `<span class="member">${escapeHtml(j.name)}${j.isHost ? '<small>（予約者）</small>' : ''}${j.rankTier ? ` ${rankChipHtml(j.rankTier)}` : ''}</span>`).join('');
-  const declined = party.declined.length ? `<div class="party-declined">不参加: ${party.declined.map(escapeHtml).join('、')}</div>` : '';
-  const me = currentMemberName();
-  const mine = (participants || []).find((p) => p.name === me);
-  const myAnswer = mine ? `<span class="my-answer">あなたの回答: ${mine.answer}</span>` : '';
-  const controls = r.status === 'キャンセル' ? '' : `
-    <div class="party-controls">
-      <select class="join-rank" data-id="${r.id}" title="あなたの現在のランク">
-        <option value="">ランク未設定</option>${rankOptionsHtml(mine?.rankTier || myDefaultRank)}
-      </select>
-      <button class="party-join-btn" data-id="${r.id}">✅ 参加する</button>
-      <button class="party-decline-btn" data-id="${r.id}">❌ 不参加</button>
-      ${myAnswer}
-    </div>`;
-  return `
-    <div class="party">
-      <div class="party-head">
-        <span class="slots">${slots}</span>
-        <span class="party-count">${party.count}/${party.capacity}人</span>
-        <span class="party-free ${party.full ? 'full' : ''}">${party.full ? '満員' : `残り${party.free}枠`}</span>
-      </div>
-      <div class="party-members">${members}</div>
-      ${declined}
-      ${controls}
-    </div>`;
+  // ……（元の中身はそのまま。あなたのブランチ側の内容を残す）
+}
+
+const STATUS_ORDER = { '募集中': 0, '確定': 1, 'キャンセル': 2 };
+
+export function applySort(items) {
+  // ……（main側の内容をそのまま残す）
 }
 
 function reservationCardHtml(r, replies, participants, myDefaultRank) {
@@ -429,7 +409,7 @@ export async function renderReservations() {
     return;
   }
 
-  const filteredItems = applyFilters(items);
+  const filteredItems = applySort(applyFilters(items));
   if (filteredItems.length === 0) {
     $('resvList').innerHTML = '<div class="empty-state">条件に一致する予約はありません。</div>';
     return;

@@ -151,6 +151,12 @@
           <input id="filterFrom" type="date" title="この日から">
           <span class="filter-sep">〜</span>
           <input id="filterTo" type="date" title="この日まで">
+          <select id="sortSelect">
+            <option value="date_asc">日時が近い順</option>
+            <option value="date_desc">日時が新しい順</option>
+            <option value="reservedBy">予約者名（あいうえお順）</option>
+            <option value="status">ステータス順</option>
+            </select>
           <button id="filterClear" type="button">クリア</button>
         </div>
 
