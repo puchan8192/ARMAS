@@ -552,3 +552,49 @@ textarea{
 .login-card button:hover{
   filter:brightness(1.08);
 }
+/* ===== パーティー（募集人数・参加状況） ===== */
+.party{margin-top:10px;padding:10px 12px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;}
+.party-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.slots{display:inline-flex;gap:4px;}
+.slot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border);display:inline-block;}
+.slot.on{background:var(--ok);border-color:var(--ok);}
+.party-count{font-weight:700;}
+.party-free{font-size:12px;color:var(--accent);}
+.party-free.full{color:var(--ok);font-weight:700;}
+.party-members{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:13px;}
+.party-members .member small{color:var(--muted);margin-left:2px;}
+.party-declined{margin-top:6px;font-size:12px;color:var(--muted);}
+.party-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;}
+.party-controls select{max-width:180px;}
+.party-controls button{padding:6px 12px;border-radius:6px;cursor:pointer;}
+.my-answer{font-size:12px;color:var(--muted);}
+
+/* ===== マップの時間帯・お気に入り ===== */
+.map-schedule,.fav-maps{margin-top:14px;}
+.map-sched-title{font-size:13px;color:var(--muted);font-weight:600;margin-bottom:6px;}
+.map-sched-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.map-sched-label{font-size:11px;padding:1px 8px;border-radius:10px;background:var(--panel-2);color:var(--muted);}
+.map-sched-range{color:var(--muted);}
+.map-pick-btn{margin-left:auto;padding:4px 10px;border-radius:6px;cursor:pointer;}
+.fav-chips{display:flex;flex-wrap:wrap;gap:6px;}
+.fav-chip{padding:5px 11px;border-radius:16px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);cursor:pointer;font-size:12.5px;}
+.fav-chip.on{border-color:var(--accent);color:var(--accent);}
+
+/* ===== 統計（ランク推移・目標・一緒に遊んだ回数） ===== */
+.stats-wide{margin-top:16px;}
+.chart-wrap{overflow-x:auto;}
+.rank-chart{width:100%;min-width:480px;height:auto;color:var(--text);}
+.chart-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;font-size:12px;}
+.chart-legend-item i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;}
+.goal-card{padding:10px 0;border-bottom:1px solid var(--border);}
+.goal-head{display:flex;gap:8px;align-items:center;font-size:13px;}
+.goal-head span{color:var(--muted);font-size:12px;}
+.goal-del{margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;}
+.goal-ranks{margin:6px 0;font-size:13px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.goal-bar{height:8px;background:var(--panel-2);border-radius:4px;overflow:hidden;}
+.goal-bar-fill{height:100%;background:var(--accent);}
+.goal-bar-fill.done{background:var(--ok);}
+.goal-pct{font-size:12px;color:var(--muted);margin-top:3px;}
+.goal-form{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+.goal-form input,.goal-form select{flex:1 1 140px;min-width:0;}
+.pair-scope{margin-left:8px;font-size:12px;}

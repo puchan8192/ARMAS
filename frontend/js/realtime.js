@@ -20,5 +20,6 @@ export function initRealtimeSync() {
   sb.channel('armas-db-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: RESV_TABLE }, scheduleRefresh)
     .on('postgres_changes', { event: '*', schema: 'public', table: REPLY_TABLE }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'participants' }, scheduleRefresh)
     .subscribe();
 }

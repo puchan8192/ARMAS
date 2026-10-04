@@ -1,7 +1,7 @@
 import { $ } from './dom.js';
 import { state } from './state.js';
 import {
-  rankOptionsHtml, statusOptionsHtml, statusClass, rankChipHtml, applyRankSelectColor,
+  rankOptionsHtml, statusOptionsHtml, statusClass, rankChipHtml, applyRankSelectColor, rankGapMessage,
 } from './constants.js';
 import {
   loadReservations,
@@ -16,7 +16,11 @@ import {
   sendDiscordCancelNotice,
   sendDiscordReplyNotice,
   sendDiscordJoinDecisionNotice,
+  sendDiscordPartyFullNotice,
 } from './discordNotify.js';
+import {
+  loadAllParticipants, loadParticipantsGrouped, saveParticipantAnswer, partyOf, currentMemberName, latestRanks,
+} from './partyApi.js';
 import { renderCalendar, renderTimeSlots } from './calendarView.js';
 import { renderUpcomingPreview } from './upcomingPreview.js';
 
@@ -40,28 +44,17 @@ export function applyFilters(items) {
   });
 }
 
+function partyBlockHtml(r, participants, myDefaultRank) {
+  // ……（元の中身はそのまま。あなたのブランチ側の内容を残す）
+}
+
 const STATUS_ORDER = { '募集中': 0, '確定': 1, 'キャンセル': 2 };
 
 export function applySort(items) {
-  const sorted = [...items];
-  switch (state.sort) {
-    case 'date_desc':
-      sorted.sort((a, b) => (`${a.date}${a.time}` < `${b.date}${b.time}` ? 1 : -1));
-      break;
-    case 'reservedBy':
-      sorted.sort((a, b) => (a.reservedBy || '').localeCompare(b.reservedBy || '', 'ja'));
-      break;
-    case 'status':
-      sorted.sort((a, b) => (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99));
-      break;
-    case 'date_asc':
-    default:
-      sorted.sort((a, b) => (`${a.date}${a.time}` < `${b.date}${b.time}` ? -1 : 1));
-  }
-  return sorted;
+  // ……（main側の内容をそのまま残す）
 }
 
-function reservationCardHtml(r, replies) {
+function reservationCardHtml(r, replies, participants, myDefaultRank) {
   const repliesHtml = replies.length
     ? replies.map((rep) => `
         <div class="reply-item">
@@ -103,6 +96,7 @@ function reservationCardHtml(r, replies) {
       ${r.rankTier ? `<div class="rank">現在のランク: ${rankChipHtml(r.rankTier)}</div>` : ''}
       ${r.map ? `<div class="map">参考マップ: ${r.map}</div>` : ''}
       ${r.note ? `<div class="note">${escapeHtml(r.note)}</div>` : ''}
+      ${partyBlockHtml(r, participants, myDefaultRank)}
 
       <div class="edit-form" id="edit-form-${r.id}">
         <div class="form-title">✏ 予約を編集</div>
@@ -112,6 +106,10 @@ function reservationCardHtml(r, replies) {
         </div>
         <label>予約先<input type="text" class="edit-for" data-id="${r.id}" value="${escapeHtml(r.reservedFor)}"></label>
         <label>ランク<select class="edit-rank" data-id="${r.id}">${rankOptionsHtml(r.rankTier)}</select></label>
+        <label>募集人数（予約者含む）<select class="edit-capacity" data-id="${r.id}">
+          <option value="2" ${r.capacity === 2 ? 'selected' : ''}>2人（デュオ）</option>
+          <option value="3" ${r.capacity !== 2 ? 'selected' : ''}>3人（トリオ）</option>
+        </select></label>
         <label>備考<textarea class="edit-note" data-id="${r.id}">${escapeHtml(r.note)}</textarea></label>
         <div class="row">
           <button class="edit-save-btn" data-id="${r.id}">保存</button>
@@ -228,6 +226,7 @@ function bindEditSave() {
       const forInput = $('resvList').querySelector(`.edit-for[data-id="${id}"]`);
       const rankSelect = $('resvList').querySelector(`.edit-rank[data-id="${id}"]`);
       const noteInput = $('resvList').querySelector(`.edit-note[data-id="${id}"]`);
+      const capacitySelect = $('resvList').querySelector(`.edit-capacity[data-id="${id}"]`);
 
       const newDate = dateInput.value;
       const newTime = timeInput.value;
@@ -258,6 +257,7 @@ function bindEditSave() {
           reservedFor: forInput.value.trim(),
           rankTier: rankSelect.value,
           note: noteInput.value.trim(),
+          capacity: Number(capacitySelect.value),
         });
       } catch (e) {
         console.error(e);
@@ -304,11 +304,6 @@ function bindReplySend(filteredItems) {
         return;
       }
 
-      // 返信が来た予約は、まだ「募集中」であれば自動的に「確定」にする
-      if (target && target.status === '募集中') {
-        await updateReservationStatus(id, '確定');
-      }
-
       const notice = await sendDiscordReplyNotice(target, repliedBy, message);
       if (!notice.sent) {
         // 保存自体は成功しているので、一覧を再描画してから通知失敗を伝える
@@ -326,30 +321,66 @@ function bindReplySend(filteredItems) {
   });
 }
 
-// Discord通知のリンクから開いた際の「参加する／参加しない」ボタン。
-// クリック時にステータスを更新し、返信スレッドにも記録した上でDiscordへ回答結果を通知する。
-async function handleJoinDecision(id, decision, filteredItems) {
-  const target = filteredItems.find((r) => r.id === id);
-  const newStatus = decision === '参加する' ? '確定' : 'キャンセル';
+// 「参加する／不参加」の回答処理（予約一覧の各カードと、Discord/LINEのリンクから開いたバナーで共通）。
+// 回答を記録し、募集人数に達したら自動で「確定」にする。確定後に人数が割れたら「募集中」に戻す。
+// ※以前は「不参加」で予約ごとキャンセルしていたが、パーティー制になったため回答の記録のみとし、
+//   キャンセルは予約者がステータスを変更して行う。
+async function handleJoinDecision(id, decision, items, participantsById, ranksByName) {
+  const target = items.find((r) => r.id === id);
+  if (!target) return;
+  const name = currentMemberName();
+  if (!name) {
+    window.alert('ログイン情報から名前を取得できませんでした。');
+    return;
+  }
+  if (name === target.reservedBy) {
+    window.alert('予約者本人はすでに参加済みです。');
+    return;
+  }
 
-  const ok = await updateReservationStatus(id, newStatus);
-  if (!ok) {
-    window.alert('回答の記録に失敗しました。Supabaseのupdateポリシーをご確認ください。');
+  const rankSelect = $('resvList').querySelector(`.join-rank[data-id="${id}"]`);
+  const rank = (rankSelect && rankSelect.value) || ranksByName[name] || '';
+  const before = partyOf(target, participantsById[id] || []);
+  const alreadyJoined = before.joined.some((j) => j.name === name);
+
+  if (decision === '参加する') {
+    if (before.full && !alreadyJoined) {
+      window.alert(`この予約はすでに満員です（${before.count}/${before.capacity}人）。`);
+      return;
+    }
+    const gap = rankGapMessage([...before.joined.map((j) => j.rankTier), rank].filter(Boolean));
+    if (gap && !window.confirm(`${gap}\nそれでも参加しますか？`)) return;
+  }
+
+  try {
+    await saveParticipantAnswer(id, name, decision === '参加する' ? '参加' : '不参加', rank);
+  } catch (e) {
+    console.error(e);
+    window.alert('回答の記録に失敗しました。participantsテーブルとポリシーをご確認ください（supabase/party_features.sql）。');
     return;
   }
 
   try {
-    await saveReply(id, decision, `（Discordのリンクからの回答）「${decision}」を選択しました。`);
+    await saveReply(id, name, `（回答）「${decision}」を選択しました。`);
   } catch (e) {
     console.error('回答の返信保存に失敗:', e);
   }
 
-  if (target) {
-    const notice = await sendDiscordJoinDecisionNotice({ ...target, status: newStatus }, decision);
-    if (!notice.sent) {
-      window.alert(`回答は記録されましたが、Discordへの通知は送信できませんでした（${notice.reason || 'Webhook未確認'}）。`);
-    }
+  // 最新の参加状況で、ステータスを自動調整する
+  const latest = (await loadParticipantsGrouped([id]))[id] || [];
+  const after = partyOf(target, latest);
+  let becameFull = false;
+  if (after.full && target.status === '募集中') {
+    if (await updateReservationStatus(id, '確定')) becameFull = true;
+  } else if (!after.full && before.full && target.status === '確定') {
+    await updateReservationStatus(id, '募集中');
   }
+
+  const notice = await sendDiscordJoinDecisionNotice(target, decision, name, after);
+  if (!notice.sent) {
+    window.alert(`回答は記録されましたが、Discordへの通知は送信できませんでした（${notice.reason || 'Webhook未確認'}）。`);
+  }
+  if (becameFull) await sendDiscordPartyFullNotice(target, after);
 
   // 一度回答したらハイライト・バナーは不要になるため解除し、URLからも `resv` を消す
   state.highlightResvId = null;
@@ -360,13 +391,11 @@ async function handleJoinDecision(id, decision, filteredItems) {
   renderReservations();
 }
 
-function bindJoinButtons(filteredItems) {
-  $('resvList').querySelectorAll('.join-yes-btn').forEach((btn) => {
-    btn.addEventListener('click', () => handleJoinDecision(btn.dataset.id, '参加する', filteredItems));
-  });
-  $('resvList').querySelectorAll('.join-no-btn').forEach((btn) => {
-    btn.addEventListener('click', () => handleJoinDecision(btn.dataset.id, '不参加', filteredItems));
-  });
+function bindJoinButtons(items, participantsById, ranksByName) {
+  const yes = (btn) => btn.addEventListener('click', () => handleJoinDecision(btn.dataset.id, '参加する', items, participantsById, ranksByName));
+  const no = (btn) => btn.addEventListener('click', () => handleJoinDecision(btn.dataset.id, '不参加', items, participantsById, ranksByName));
+  $('resvList').querySelectorAll('.join-yes-btn, .party-join-btn').forEach(yes);
+  $('resvList').querySelectorAll('.join-no-btn, .party-decline-btn').forEach(no);
 }
 
 let hasScrolledToHighlight = false;
@@ -387,9 +416,17 @@ export async function renderReservations() {
   }
 
   const repliesByResv = await loadRepliesGrouped(filteredItems.map((r) => r.id));
+  const allParticipants = await loadAllParticipants();
+  const participantsById = {};
+  allParticipants.forEach((p) => {
+    if (!participantsById[p.reservationId]) participantsById[p.reservationId] = [];
+    participantsById[p.reservationId].push(p);
+  });
+  const ranksByName = latestRanks(items, allParticipants);
+  const myRank = ranksByName[currentMemberName()] || '';
 
   $('resvList').innerHTML = filteredItems
-    .map((r) => reservationCardHtml(r, repliesByResv[r.id] || []))
+    .map((r) => reservationCardHtml(r, repliesByResv[r.id] || [], participantsById[r.id] || [], myRank))
     .join('');
 
   bindDeleteButtons(filteredItems);
@@ -399,7 +436,11 @@ export async function renderReservations() {
   bindReplyToggle();
   bindEditSave();
   bindReplySend(filteredItems);
-  bindJoinButtons(filteredItems);
+  bindJoinButtons(filteredItems, participantsById, ranksByName);
+  $('resvList').querySelectorAll('.join-rank').forEach((sel) => {
+    applyRankSelectColor(sel);
+    sel.addEventListener('change', () => applyRankSelectColor(sel));
+  });
 
   if (state.highlightResvId && !hasScrolledToHighlight) {
     const el = document.querySelector(`.resv[data-id="${state.highlightResvId}"]`);

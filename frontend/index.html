@@ -112,6 +112,12 @@
           <label>現在のランク
             <select id="rankTier"></select>
           </label>
+          <label>募集人数（予約者含む）
+            <select id="capacity">
+              <option value="3" selected>3人（トリオ）</option>
+              <option value="2">2人（デュオ）</option>
+            </select>
+          </label>
         </div>
 
         <textarea id="notes" placeholder="備考（任意）例：デュオでプラチナ帯希望、ボイスチャット必須 など"></textarea>
@@ -125,6 +131,8 @@
         <div class="map-box" id="mapBox">
           <p class="fallback">APIキー未設定のため取得できません。設定からAPIキーを登録してください。</p>
         </div>
+        <div class="map-schedule" id="mapSchedule"></div>
+        <div class="fav-maps" id="favMaps"></div>
 
         <h2 style="margin-top:26px;"><span class="num">03</span> 直近の予約</h2>
         <div class="upcoming-list" id="upcomingList">
